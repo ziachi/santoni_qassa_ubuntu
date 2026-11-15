@@ -1,0 +1,27 @@
+# pulse-default.pa — PulseAudio server config for the santoni chroot.
+#
+# Loaded with:
+#   pulseaudio --daemonize=no -nF /data/ubuntu/etc/pulse/pulse-default.pa
+#
+# The socket lives in /data/ubuntu/tmp so both the Android side and the chroot
+# can reach it without a bind mount of /run.
+
+# Unix socket only. No TCP listener: the chroot is the only client.
+load-module module-native-protocol-unix socket=/data/ubuntu/tmp/pulse.sock auth-anonymous=1
+
+# Output through the Android audio HAL via OpenSL ES.
+#
+# NOT an upstream PulseAudio module. This is the prebuilt arm64 module
+# described in README.md; the config fails to load until it is present in
+# /data/ubuntu/usr/lib/pulse-*/modules/.
+load-module module-sles-sink sink_name=sles_sink
+
+# Capture through the same HAL.
+load-module module-sles-source source_name=sles_source
+
+set-default-sink sles_sink
+set-default-source sles_source
+
+# The chroot has no dbus and no X11, so keep the daemon minimal. A null sink
+# gives clients something to fall back to when the HAL is busy.
+load-module module-null-sink sink_name=null_sink

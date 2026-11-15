@@ -42,6 +42,7 @@
 | 36 | v22 | - | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
 | 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
 | 38 | v22 | - | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
+| 39 | v22 | - | [v22] santoni: audio-bridge skeleton — PulseAudio over OpenSL ES (#39) |
 
 ## Releases
 
@@ -638,6 +639,44 @@ No build change: Soong never parses the directory. The skeleton compiles only
 after the file is renamed to `Android.bp` and `enabled` is flipped, and it is
 not a working stream until the three documented gaps are filled. The UID note
 saves the next person from debugging a permission failure as a camera failure.
+
+### #39 — audio-bridge: PulseAudio over OpenSL ES, config only
+
+**Problem**
+The chroot has no audio. `/dev/snd/*` is owned by `audio:audio` and the Android
+audio HAL holds the PCM devices open, so a chroot process opening them directly
+gets `EBUSY` or silence, and it bypasses the HAL's routing even when it works.
+
+**Trial-Error**
+- Bind-mounting `/dev/snd` into the chroot was the obvious shortcut and it does
+  not work for the reason above.
+- `module-sles-sink` and `module-sles-source` are not upstream PulseAudio
+  modules. They have to be built or obtained separately, so a config that
+  references them fails to load on a stock PulseAudio install.
+- Nothing in this tree can fabricate the arm64 PulseAudio binary. Writing a
+  placeholder would have produced a config that looks complete and is not.
+
+**Fix**
+- New `audio-bridge/pulse-default.pa`: unix socket at
+  `/data/ubuntu/tmp/pulse.sock` so both sides reach it without a `/run` bind
+  mount, plus `module-sles-sink` and `module-sles-source` for output and
+  capture through OpenSL ES.
+- `audio-bridge/Android.bp.disabled`: `prebuilt_etc` with `enabled: false`, so
+  the config is not installed until the file is renamed.
+- `audio-bridge/README.md`: states plainly that the binary and the OpenSL ES
+  modules are not in the tree, and gives the command to check what is actually
+  installed inside the chroot.
+
+**Files**
+`audio-bridge/pulse-default.pa`, `audio-bridge/Android.bp.disabled`,
+`audio-bridge/README.md`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+No build change: Soong never parses the directory. The config will fail to load
+until the arm64 PulseAudio binary and the OpenSL ES modules exist in
+`/data/ubuntu/usr/lib/pulse-*/modules/`. Going through OpenSL ES keeps the HAL
+in charge of the mixer and the output path instead of racing it for the PCM
+device.
 
 ## Key Changes by Version
 

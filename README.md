@@ -454,6 +454,13 @@ only entry point. Missing: JPEG encode, the repeating request, and the MJPEG
 server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot —
 `cameraserver` rejects clients outside the `camera` group.
 
+#### `audio-bridge` — speaker and mic
+
+PulseAudio config only. The unix socket is `/data/ubuntu/tmp/pulse.sock` and the
+sink/source go through OpenSL ES so the Android audio HAL keeps the mixer. The
+arm64 PulseAudio binary and the `module-sles-*` modules are **not** in this
+tree; the config fails to load until they are installed in the chroot.
+
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
