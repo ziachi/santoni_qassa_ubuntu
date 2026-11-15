@@ -81,7 +81,7 @@ int main() {
 
     int enabled = 0;
     for (int32_t type : types) {
-        ASensor* sensor = ASensorManager_getDefaultSensor(manager, type);
+        const ASensor* sensor = ASensorManager_getDefaultSensor(manager, type);
         if (sensor == nullptr) {
             LOGI("no sensor for type %d", type);
             continue;

@@ -49,6 +49,8 @@
 | 43 | v22 | - | [v22] santoni: Add qassa-ubuntu branches + kernel headers requirement (#43) |
 | 44 | v22 | - | [v22] santoni: Wire init.ubuntu.sh + init.ubuntu.rc into the build (#44) |
 | 45 | v22 | - | [v22] santoni: Enable webcam/audio/sensor bridges (#45) |
+| 46 | v22 | - | [v22] santoni: Install init.ubuntu.sh to system/bin 0755 and its rc to system/etc/init (#46) |
+| 47 | v22 | - | [v22] santoni: Fix const ASensor* in sensor_bridge (#47) |
 
 ## Releases
 
