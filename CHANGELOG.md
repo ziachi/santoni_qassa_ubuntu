@@ -34,7 +34,8 @@
 | 28 | v21 | 4d8f288 | [v21] santoni: Headless mode + SELinux permissive (#28) |
 | 29 | v21 | 0acc93c | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
 | 30 | v21 | 9d13e81 | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
-| 31 | v21 | - | [v21] santoni: vps-setup first-run installer (#31) |
+| 31 | v21 | 552ab0c | [v21] santoni: vps-setup first-run installer (#31) |
+| 32 | v21 | - | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
 
 ## Releases
 
@@ -324,6 +325,50 @@ without a screen. The first setup has to be a single command over USB.
 `adb shell vps-setup <SSID> <PASSWORD>` over USB takes a blank device to a
 bootable Ubuntu 22.04 chroot. Re-running it re-extracts the rootfs over the
 existing one.
+
+### #32 — Auto-start Ubuntu, wake lock, ZRAM 2 GB
+
+**Problem**
+The chroot only came up when someone ran `ubuntu-enter`. A VPS has to come up
+on its own after a power cut, stay awake, and have enough swap for a 3 GB
+device running a full userspace.
+
+**Trial-Error**
+- `fstab.qcom` already declares zram0 as swap with `zramsize=1073741824`, and
+  `init.target.rc` runs `swapon_all` on it. Re-configuring zram0 from a boot
+  script without `swapoff` first fails, because the device is busy. The script
+  therefore does `swapoff` → `reset` → `disksize` → `mkswap` → `swapon`, and
+  only when the running size differs from 2 GB.
+- The right place for the size is the fstab, not the script: `swapon_all` runs
+  long before `sys.boot_completed`. Both are changed — the fstab sets 2 GB at
+  boot, the script is the safety net for a device that booted with the old
+  fstab.
+- `sys.boot_completed=1` is the only safe trigger: before that `/data` may not
+  be decrypted, so `/data/ubuntu` would not exist yet.
+- `service ssh start` needs `/proc` and `/run` inside the chroot, so the bind
+  mounts have to happen first. `/run` was missing from the original list.
+
+**Fix**
+- `rootdir/fstab.qcom`: `zramsize=2147483648` (2 GB).
+- `rootdir/init.ubuntu.sh` installed to `/vendor/bin/init.ubuntu.sh`:
+  - `echo vps_server_lock > /sys/power/wake_lock` — no deep sleep.
+  - zram0 check/resize to 2147483648 bytes, `mkswap` + `swapon`.
+  - bind-mount `/dev`, `/dev/pts`, `/proc`, `/sys`, `/run` into `/data/ubuntu`.
+  - `chroot /data/ubuntu /usr/sbin/service ssh start`, with a clear log line
+    when `openssh-server` is not installed.
+- `rootdir/init.ubuntu.rc` defines `service vps-boot` (`oneshot`, `disabled`)
+  and starts it `on property:sys.boot_completed=1`. Imported from
+  `init.qcom.rc`.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `rootdir/init.ubuntu.rc`, `rootdir/Android.mk`,
+`rootdir/init.qcom.rc`, `rootdir/fstab.qcom`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+- Ubuntu comes up by itself after every boot, with sshd running if installed.
+- The device never suspends, so it stays reachable.
+- Swap grows from 1 GB to 2 GB, which matters on a 3 GB device.
+- Everything is logged under the `vps-boot:` tag in logcat.
 
 ## Key Changes by Version
 

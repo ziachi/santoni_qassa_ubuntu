@@ -327,6 +327,26 @@ After that, `adb shell` lands in Ubuntu as root. Finish the VPS:
 apt update && apt install -y openssh-server
 ```
 
+### Boot behaviour
+
+`init.ubuntu.rc` starts `vps-boot` on `sys.boot_completed=1`, which runs
+`/vendor/bin/init.ubuntu.sh`:
+
+| Step | What it does |
+|---|---|
+| Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
+| ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
+| Bind mounts | `/dev`, `/dev/pts`, `/proc`, `/sys`, `/run` into `/data/ubuntu` |
+| SSH | `chroot /data/ubuntu /usr/sbin/service ssh start` |
+
+`fstab.qcom` already asks for `zramsize=2147483648`, so the ZRAM step is
+normally just a check — it exists for a device that booted with the old 1 GB
+fstab. Everything logs under the `vps-boot:` tag:
+
+```bash
+adb logcat -s vps-boot
+```
+
 ## Kernel Capability Check
 
 The prebuilt kernel is verified against the options the Ubuntu chroot needs:

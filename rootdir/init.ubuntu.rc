@@ -1,0 +1,12 @@
+# Headless VPS: bring up the Ubuntu chroot once Android has finished booting.
+# Imported from init.qcom.rc.
+
+service vps-boot /vendor/bin/init.ubuntu.sh
+    class late_start
+    user root
+    group root system
+    oneshot
+    disabled
+
+on property:sys.boot_completed=1
+    start vps-boot
