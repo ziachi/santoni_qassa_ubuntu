@@ -33,8 +33,8 @@ All custom repos for this ROM. Clone each into the matching path inside the Qass
 ~/qassa/                                    <- ROM source root
 |-- .repo/                                  <- repo tool metadata
 |-- device/xiaomi/santoni/                  <- THIS REPO (device tree)
-|-- vendor/xiaomi/santoni/                  <- Vendor blobs
-|-- kernel/xiaomi/msm8937/                  <- Kernel source (OPTIONAL, see below)
+|-- vendor/xiaomi/                          <- Vendor blobs (repo root holds santoni/)
+|-- kernel/xiaomi/msm8937/                  <- Kernel headers (REQUIRED, see below)
 |-- frameworks/base/                        <- Framework patches (custom)
 |-- vendor/qassa/                           <- ROM vendor config (from repo sync)
 |-- vendor/ziachi-keys/                     <- Signing keys (NOT on GitHub)
@@ -46,8 +46,8 @@ All custom repos for this ROM. Clone each into the matching path inside the Qass
 | Repo | GitHub URL | Branch | Clone Path |
 |------|-----------|--------|------------|
 | **Device tree** | [santoni_qassa_ubuntu](https://github.com/ziachi/santoni_qassa_ubuntu) | `main` | `device/xiaomi/santoni` |
-| **Vendor blobs** | [vendor_xiaomi_santoni_qassa](https://github.com/ziachi/vendor_xiaomi_santoni_qassa) | `10.0` | `vendor/xiaomi/santoni` |
-| **Kernel** | [kernel_xiaomi_msm8937_qassa](https://github.com/ziachi/kernel_xiaomi_msm8937_qassa) | `13` | `kernel/xiaomi/msm8937` |
+| **Vendor blobs** | [vendor_xiaomi_santoni_qassa](https://github.com/ziachi/vendor_xiaomi_santoni_qassa) | `qassa-ubuntu` (base `10.0`) | `vendor/xiaomi` |
+| **Kernel headers** | [kernel_xiaomi_msm8937_qassa](https://github.com/ziachi/kernel_xiaomi_msm8937_qassa) | `qassa-ubuntu` (base `10`) | `kernel/xiaomi/msm8937` |
 | **Framework** | [frameworks_base_qassa](https://github.com/ziachi/frameworks_base_qassa) | `qassa-10` | `frameworks/base` |
 
 > **Signing keys** (`vendor/ziachi-keys`) are NOT on GitHub. Generate your own or ask the maintainer.
@@ -107,20 +107,24 @@ rm -rf device/xiaomi/santoni
 git clone https://github.com/ziachi/santoni_qassa_ubuntu.git \
     device/xiaomi/santoni -b main
 
-# Vendor blobs — the repo root is vendor/xiaomi, its content is santoni/.
-# Cloning into vendor/xiaomi/santoni nests it one level too deep and lunch
-# then dies with "vendor/xiaomi/santoni/santoni-vendor.mk does not exist".
-rm -rf vendor/xiaomi/santoni
+# Vendor blobs — the repo root holds a single santoni/ directory, so clone it
+# one level up. Cloning into vendor/xiaomi/santoni doubles the path and lunch
+# fails with "vendor/xiaomi/santoni/santoni-vendor.mk" does not exist.
+rm -rf vendor/xiaomi
 git clone https://github.com/ziachi/vendor_xiaomi_santoni_qassa.git \
-    vendor/xiaomi -b 10.0
+    vendor/xiaomi -b qassa-ubuntu
 
-# Kernel — OPTIONAL
-# The boot image is built from prebuilts/kernel/Image.gz-dtb (Luuvy C.4.0),
-# so this clone is only needed if you want to compile the kernel yourself.
-# If you do, also export SANTONI_BUILD_KERNEL=1 before building.
-# rm -rf kernel/xiaomi/msm8937
-# git clone https://github.com/ziachi/kernel_xiaomi_msm8937_qassa.git \
-#     kernel/xiaomi/msm8937 -b 13
+# Kernel headers — REQUIRED, even though the boot image is prebuilt.
+# Soong's generated_kernel_includes module runs
+# "make -C kernel/xiaomi/msm8937 headers_install", and external/tinycompress
+# plus hardware/qassa/interfaces/cryptfshw/1.0 consume the output. Without
+# this checkout the build stops at 1% with
+# "make: *** kernel/xiaomi/msm8937: No such file or directory. Stop."
+# The boot image still comes from prebuilts/kernel/Image.gz-dtb
+# (Luuvy C.4.0), so nothing built here reaches the device.
+rm -rf kernel/xiaomi/msm8937
+git clone https://github.com/ziachi/kernel_xiaomi_msm8937_qassa.git \
+    kernel/xiaomi/msm8937 -b qassa-ubuntu
 
 # Framework patches (on top of synced frameworks/base)
 cd frameworks/base
@@ -577,7 +581,7 @@ mka qassa -j$(nproc)
 | Fix SELinux denial | Add rules to `sepolicy/vendor/`. The headless VPS build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
 | Debloat system app | Add entry to `debloat/Android.bp` |
 | Add overlay | Put XML in `overlay/` or `overlay-lineage/` |
-| Update kernel config | Edit defconfig in `kernel/xiaomi/msm8937` |
+| Update kernel config | Not applicable — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
 
 ### Disk Management
 The `out/` directory grows to 200GB+. Always check `df -h` before building.

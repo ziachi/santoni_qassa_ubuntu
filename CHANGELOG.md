@@ -46,6 +46,7 @@
 | 40 | v22 | de32ed6 | [v22] santoni: sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp (#40) |
 | 41 | v22 | e4e1218 | [v22] santoni: Re-enable the ADB over Wi-Fi password gate (#41) |
 | 42 | v22 | - | [v22] santoni: Fix 5 documentation bugs and script step labels (#42) |
+| 43 | v22 | - | [v22] santoni: Add qassa-ubuntu branches + kernel headers requirement (#43) |
 
 ## Releases
 
@@ -792,6 +793,39 @@ Five documentation defects made the guide actively misleading:
 No build change. A fresh clone following Step 2 now produces a tree `lunch`
 accepts, the installer's progress counter is consistent, and the agent-facing
 rules no longer contradict the SELinux policy the build actually ships.
+
+### #43 — qassa-ubuntu branches, kernel headers requirement, vendor clone path
+
+**Problem**
+The build stopped at 1% because `kernel/xiaomi/msm8937` did not exist. Soong's
+`generated_kernel_includes` module runs
+`make -C kernel/xiaomi/msm8937 headers_install`, and its output is consumed by
+`external/tinycompress` and `hardware/qassa/interfaces/cryptfshw/1.0`, so the
+module cannot be stubbed out. The README still described the kernel checkout as
+OPTIONAL and pointed at branch `13`, which does not exist on the kernel repo
+(the branches are `10` and now `qassa-ubuntu`).
+
+**Fix**
+- Kernel repo: new branch `qassa-ubuntu` based on `10`, with a README note that
+  the branch exists to supply `headers_install` output for the headless Ubuntu
+  project and that the boot image still comes from the prebuilt Luuvy C.4.0
+  `Image.gz-dtb`.
+- Vendor repo: new branch `qassa-ubuntu` based on `10.0`, plus a root README
+  documenting the branch and the clone path.
+- README: Repository Map and Step 2 now list all three repos with their
+  `qassa-ubuntu` branches. The kernel clone is no longer commented out and is
+  no longer described as optional. The vendor clone target is `vendor/xiaomi`,
+  because the vendor repo root holds a single `santoni/` directory.
+- README: the "Update kernel config" common task no longer implies that editing
+  a defconfig changes the shipped kernel.
+
+**Files**
+`README.md`, `CHANGELOG.md`
+
+**Impact**
+No build-system change. A fresh clone following Step 2 now produces a tree that
+gets past the 1% `generated_kernel_includes` failure. The boot image is
+unchanged — it is still the prebuilt Luuvy C.4.0 kernel.
 
 ## Key Changes by Version
 
