@@ -5,9 +5,9 @@
 #   adb shell vps-setup <SSID> <WIFI_PASSWORD>
 #
 # Joins the Wi-Fi network, downloads the Ubuntu 22.04 arm64 base rootfs,
-# unpacks it into /data/ubuntu, prepares it for chroot and seeds the
-# ADB-over-Wi-Fi password file. Run it over USB: the Wi-Fi password gate in
-# ubuntu-enter does not apply to a USB session.
+# unpacks it into /data/ubuntu, prepares it for chroot, seeds the ADB-over-Wi-Fi
+# password file and installs openssh-server inside the chroot. Run it over USB:
+# the Wi-Fi password gate in ubuntu-enter does not apply to a USB session.
 
 set -u
 
@@ -114,7 +114,7 @@ EOF
 fi
 
 # ------------------------------------------------------- 5. ADB password
-echo "[6/6] Seeding the ADB Wi-Fi password"
+echo "[6/7] Seeding the ADB Wi-Fi password"
 PASS_FILE=/data/adb_wifi_pass
 if [ ! -s "$PASS_FILE" ]; then
     echo "santoniadmin" > "$PASS_FILE" || die "cannot write $PASS_FILE"
@@ -125,8 +125,43 @@ fi
 chmod 600 "$PASS_FILE" 2>/dev/null
 chown 0:0 "$PASS_FILE" 2>/dev/null
 
+# ---------------------------------------------------- 6. openssh-server
+echo "[7/7] Installing openssh-server inside the chroot"
+
+# apt needs /dev, /proc, /sys and a resolv.conf inside the chroot. These are
+# the same mounts init.ubuntu.sh sets up on every boot; they are torn down
+# again here so the first boot starts from a clean mount table.
+mkdir -p "$UBUNTU_ROOT/dev" "$UBUNTU_ROOT/proc" "$UBUNTU_ROOT/sys" \
+         "$UBUNTU_ROOT/tmp" "$UBUNTU_ROOT/run/sshd"
+
+if mount -o rbind /dev "$UBUNTU_ROOT/dev" 2>/dev/null; then
+    mount -o rslave "$UBUNTU_ROOT/dev" 2>/dev/null
+fi
+mount -t proc proc "$UBUNTU_ROOT/proc" 2>/dev/null
+mount -t sysfs sysfs "$UBUNTU_ROOT/sys" 2>/dev/null
+chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
+
+cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+EOF
+
+if chroot "$UBUNTU_ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+        /bin/sh -c 'apt-get update && apt-get install -y openssh-server'; then
+    echo "      openssh-server installed"
+else
+    echo "      apt failed — run 'apt update && apt install -y openssh-server'"
+    echo "      inside the chroot once the device has network"
+fi
+
+umount "$UBUNTU_ROOT/sys" 2>/dev/null
+umount "$UBUNTU_ROOT/proc" 2>/dev/null
+umount "$UBUNTU_ROOT/dev/pts" 2>/dev/null
+umount "$UBUNTU_ROOT/dev" 2>/dev/null
+
 echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"
 echo "  Wi-Fi IP : $ip_addr"
 echo "  Enter    : adb shell   (or ubuntu-enter over Wi-Fi, password santoniadmin)"
+echo "  SSH      : set a root password first — chroot $UBUNTU_ROOT passwd root"
 echo "  Next     : apt update && apt install -y openssh-server"

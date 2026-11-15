@@ -74,17 +74,81 @@ if [ ! -x "$UBUNTU_ROOT/bin/bash" ]; then
     exit 0
 fi
 
-for d in dev dev/pts proc sys run; do
-    mkdir -p "$UBUNTU_ROOT/$d"
-    if grep -q " $UBUNTU_ROOT/$d " /proc/mounts 2>/dev/null; then
-        continue
-    fi
-    if mount --bind "/$d" "$UBUNTU_ROOT/$d" 2>/dev/null; then
-        log "bind-mounted /$d"
-    else
-        log "could not bind-mount /$d"
-    fi
-done
+# toybox mount takes the -o forms; util-linux takes --rbind/--make-rslave.
+# Probe once so the same script works on either, and fall back to busybox when
+# the built-in mount understands neither.
+MOUNT_STYLE=short
+if mount --help 2>&1 | grep -q -- "--rbind"; then
+    MOUNT_STYLE=long
+elif command -v busybox >/dev/null 2>&1 && ! mount --help 2>&1 | grep -q "rbind"; then
+    MOUNT_STYLE=busybox
+fi
+log "mount syntax: $MOUNT_STYLE"
+
+rbind() {
+    case "$MOUNT_STYLE" in
+        long)    mount --rbind "$1" "$2" ;;
+        busybox) busybox mount -o rbind "$1" "$2" ;;
+        *)       mount -o rbind "$1" "$2" ;;
+    esac
+}
+
+make_rslave() {
+    case "$MOUNT_STYLE" in
+        long)    mount --make-rslave "$1" ;;
+        busybox) busybox mount -o rslave "$1" ;;
+        *)       mount -o rslave "$1" ;;
+    esac
+}
+
+# /dev is rbind-mounted, not bind-mounted. ueventd keeps creating nodes after
+# boot (/dev/video*, /dev/snd/*, /dev/input/*), and a plain bind would freeze
+# the chroot's view at the moment of the mount. --make-rslave stops an unmount
+# inside the chroot from propagating back into Android's /dev.
+mkdir -p "$UBUNTU_ROOT/dev"
+if grep -q " $UBUNTU_ROOT/dev " /proc/mounts 2>/dev/null; then
+    log "/dev already mounted in chroot"
+elif rbind /dev "$UBUNTU_ROOT/dev" 2>/dev/null; then
+    make_rslave "$UBUNTU_ROOT/dev"
+    log "rbind-mounted /dev (rslave)"
+else
+    log "could not rbind /dev"
+fi
+
+# The rbind above normally brings /dev/pts with it. Mount a fresh devpts only
+# when it did not, otherwise the chroot ends up with two devpts instances and
+# pty allocation breaks.
+mkdir -p "$UBUNTU_ROOT/dev/pts"
+if grep -q " $UBUNTU_ROOT/dev/pts " /proc/mounts 2>/dev/null; then
+    log "/dev/pts already mounted in chroot"
+elif mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" 2>/dev/null; then
+    log "mounted devpts"
+else
+    log "could not mount devpts"
+fi
+
+mkdir -p "$UBUNTU_ROOT/proc"
+if grep -q " $UBUNTU_ROOT/proc " /proc/mounts 2>/dev/null; then
+    log "/proc already mounted in chroot"
+elif mount -t proc proc "$UBUNTU_ROOT/proc" 2>/dev/null; then
+    log "mounted /proc"
+else
+    log "could not mount /proc"
+fi
+
+mkdir -p "$UBUNTU_ROOT/sys"
+if grep -q " $UBUNTU_ROOT/sys " /proc/mounts 2>/dev/null; then
+    log "/sys already mounted in chroot"
+elif mount -t sysfs sysfs "$UBUNTU_ROOT/sys" 2>/dev/null; then
+    log "mounted /sys"
+else
+    log "could not mount /sys"
+fi
+
+# sshd refuses to start without /run/sshd, and apt needs a writable /tmp.
+mkdir -p "$UBUNTU_ROOT/tmp" "$UBUNTU_ROOT/run/sshd"
+chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
+chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     if chroot "$UBUNTU_ROOT" /usr/sbin/service ssh start >/dev/null 2>&1; then

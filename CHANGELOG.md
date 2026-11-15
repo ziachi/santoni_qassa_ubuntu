@@ -40,6 +40,7 @@
 | 34 | v21 | - | [v21] santoni: Point docs at the working repo (#34) |
 | 35 | v21 | - | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
 | 36 | v22 | - | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
+| 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
 
 ## Releases
 
@@ -547,6 +548,56 @@ carrying dead code. No change to the HAL services: `vendor.sensors.qti`,
 `audioserver`, `media` and `netd` were verified to have no `disabled` line.
 `wpa_supplicant` does carry `disabled`, which is the upstream AOSP design —
 `WifiService` starts it on demand.
+
+### #37 — rbind /dev into the chroot, install sshd, open debug access
+
+**Problem**
+`init.ubuntu.sh` bind-mounted `/dev` with a plain `mount --bind`. ueventd keeps
+creating device nodes after boot (`/dev/video*`, `/dev/snd/*`, `/dev/input/*`),
+and a plain bind freezes the chroot's view at the moment of the mount, so the
+camera, audio and sensor nodes the HAL bridges need were simply not there.
+`/dev/pts` was then bind-mounted on top of that, which produced two devpts
+instances and broke pty allocation. `sshd` also never started on a fresh
+install: `vps-setup` did not install `openssh-server`, and `/run/sshd` did not
+exist.
+
+**Trial-Error**
+- `mount --help` on this tree's toybox does not list `--rbind`; toybox takes the
+  `-o rbind` / `-o rslave` forms, util-linux takes `--rbind` / `--make-rslave`.
+  One hard-coded syntax cannot work on both, so the script probes once.
+- Mounting devpts unconditionally after an rbind of `/dev` gave the chroot two
+  devpts instances; `ssh` sessions then failed to allocate a pty.
+- `service ssh start` exits non-zero when `/run/sshd` is missing, which is the
+  state of a freshly unpacked rootfs.
+
+**Fix**
+- `rootdir/init.ubuntu.sh`: probe the mount syntax once (`long` / `short` /
+  `busybox`) and route `rbind` and `make_rslave` through it.
+- `rootdir/init.ubuntu.sh`: `rbind` `/dev` and `make-rslave` it, so nodes
+  created after boot appear in the chroot and an unmount inside the chroot does
+  not propagate back into Android's `/dev`.
+- `rootdir/init.ubuntu.sh`: mount devpts only when the rbind did not already
+  bring `/dev/pts` along, checked against `/proc/mounts`.
+- `rootdir/init.ubuntu.sh`: mount `/proc` and `/sys`, create `/data/ubuntu/tmp`
+  (1777) and `/data/ubuntu/run/sshd` (0755) before `service ssh start`.
+- `vps-setup/vps-setup.sh`: new step 7 mounts `/dev`, `/proc` and `/sys`, writes
+  a `resolv.conf`, runs `apt update && apt install -y openssh-server` inside the
+  chroot, then tears the mounts down again.
+- `ubuntu-enter/ubuntu-enter.sh`: `DEBUG_NO_PASSWORD=1` skips the Wi-Fi password
+  gate on both the interactive path and the `-c` path.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `vps-setup/vps-setup.sh`,
+`ubuntu-enter/ubuntu-enter.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+The chroot now sees device nodes created after boot, so the camera, audio and
+sensor bridges have something to open. `sshd` starts on the first boot after
+`vps-setup` instead of needing a manual `apt install`. `DEBUG_NO_PASSWORD=1`
+means a USB cable and ADB over Wi-Fi on 5555 both land in a root Ubuntu shell
+with no prompt; together with `ro.adb.secure=0` and `ro.secure=0` that is a
+debug-phase posture only, and `README.md` now says so. Set it back to `0` before
+the device leaves the bench — the gate is intact and takes over immediately.
 
 ## Key Changes by Version
 

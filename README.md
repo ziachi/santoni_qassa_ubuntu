@@ -236,8 +236,7 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 adb connect 192.168.1.50:5555
 echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
 
-# 4. inside Ubuntu — install sshd and give root a password
-apt update && apt install -y openssh-server
+# 4. inside Ubuntu — give root a password (vps-setup already installed sshd)
 passwd root                       # sshd refuses an empty root password
 
 # 5. from any machine on the LAN
@@ -307,6 +306,12 @@ adb connect 192.168.1.50:5555
 adb -s 192.168.1.50:5555 shell
 ```
 
+> **Debug-phase access only.** `ro.adb.secure=0`, `ro.secure=0` and ADB over
+> Wi-Fi on 5555 without authentication mean anyone who can reach port 5555 is
+> root. That is deliberate while the device sits on the bench on a trusted
+> LAN, and it is not a shipping configuration. `ubuntu-enter` also runs with
+> `DEBUG_NO_PASSWORD=1`, which removes the Wi-Fi password gate entirely.
+
 ### Login shell: `ubuntu-enter`
 
 `persist.sys.adb.shell=/system/bin/ubuntu-enter` makes every adb session go
@@ -316,6 +321,7 @@ through a dual-auth wrapper:
 |---|---|
 | USB attached (`/sys/class/android_usb/android0/state` = `CONFIGURED`) | straight in, no password |
 | Wi-Fi only (`DISCONNECTED`) | `ADB Wi-Fi Password:` prompt, 3 tries, then the session is closed |
+| `DEBUG_NO_PASSWORD=1` (current) | the prompt is skipped on every transport — debug phase only |
 | Ubuntu installed (`/data/ubuntu/bin/bash`) | `chroot /data/ubuntu /bin/bash -l` as root |
 | Ubuntu not installed | drops to `/system/bin/sh` with a hint to run `vps-setup` |
 
@@ -374,7 +380,7 @@ Flash the ROM, plug in USB, then run one command:
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-It does six things:
+It does seven things:
 
 1. `svc wifi enable`, wait for `wpa_supplicant`, then
    `cmd wifi connect-network <SSID> wpa2 <PASSWORD>`
@@ -386,6 +392,8 @@ It does six things:
    `ports.ubuntu.com`
 6. create `/data/adb_wifi_pass` with `santoniadmin` if it is missing, then
    `chmod 600` and `chown 0:0`
+7. mount `/dev`, `/proc` and `/sys` inside the chroot, write a `resolv.conf`,
+   then `apt update && apt install -y openssh-server` and unmount again
 
 If the device has no `curl` and no `wget`, the script prints the `adb push`
 recipe instead of failing silently:
@@ -396,10 +404,12 @@ adb push ubuntu-base-22.04-base-arm64.tar.gz /data/local/tmp/ubuntu-base.tar.gz
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-After that, `adb shell` lands in Ubuntu as root. Finish the VPS:
+After that, `adb shell` lands in Ubuntu as root with `openssh-server` already
+installed. The only thing left is a root password, because `sshd` refuses an
+empty one:
 
 ```bash
-apt update && apt install -y openssh-server
+passwd root
 ```
 
 ### Boot behaviour
@@ -412,8 +422,16 @@ apt update && apt install -y openssh-server
 | Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
-| Bind mounts | `/dev`, `/dev/pts`, `/proc`, `/sys`, `/run` into `/data/ubuntu` |
+| Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
+| sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
 | SSH | `chroot /data/ubuntu /usr/sbin/service ssh start` |
+
+`/dev` is rbind-mounted rather than bind-mounted because ueventd keeps creating
+nodes after boot; a plain bind would freeze the chroot's view at the moment of
+the mount. `--make-rslave` keeps an unmount inside the chroot from propagating
+back into Android's `/dev`. The mount syntax is probed once at boot: toybox
+takes `-o rbind` / `-o rslave`, util-linux takes `--rbind` / `--make-rslave`,
+and busybox is used when the built-in mount understands neither.
 
 `fstab.qcom` already asks for `zramsize=2147483648`, so the ZRAM step is
 normally just a check — it exists for a device that booted with the old 1 GB
@@ -433,7 +451,7 @@ adb logcat -s vps-boot
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
-| `vps-boot: could not bind-mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
+| `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
 | `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
 
 ## Kernel Capability Check

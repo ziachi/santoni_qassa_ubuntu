@@ -5,6 +5,9 @@
 #   USB attached (gadget CONFIGURED)  -> straight in, no password
 #   Wi-Fi only (gadget DISCONNECTED)  -> hidden password prompt, 3 tries, exit 1
 #
+# DEBUG_NO_PASSWORD=1 below disables the Wi-Fi prompt entirely. See the note
+# there before shipping a build with it set.
+#
 # The Wi-Fi password lives in /data/adb_wifi_pass and defaults to
 # "santoniadmin". Change it with:
 #     echo 'newpassword' > /data/adb_wifi_pass
@@ -17,6 +20,16 @@ PASS_FILE=/data/adb_wifi_pass
 DEFAULT_PASS=santoniadmin
 UBUNTU_ROOT=/data/ubuntu
 MAX_TRIES=3
+
+# --- DEBUG MODE ----------------------------------------------------------
+# 1 = no password prompt on any transport. A USB cable and ADB over Wi-Fi on
+# port 5555 both land straight in the root Ubuntu shell.
+#
+# This is a debug-phase setting. Together with ro.adb.secure=0 and ro.secure=0
+# it means anyone who can reach port 5555 is root, so it is only acceptable
+# while the device sits on a trusted LAN. Set it back to 0 before the device
+# leaves the bench; the gate below is intact and takes over immediately.
+DEBUG_NO_PASSWORD=1
 
 usb_configured() {
     state=""
@@ -76,14 +89,14 @@ enter_ubuntu() {
 # first, then hand the command to the real shell.
 if [ "$1" = "-c" ]; then
     shift
-    if ! usb_configured && ! prompt_password; then
+    if [ "$DEBUG_NO_PASSWORD" != "1" ] && ! usb_configured && ! prompt_password; then
         echo "Too many wrong passwords. Closing session."
         exit 1
     fi
     exec /system/bin/sh -c "$*"
 fi
 
-if ! usb_configured && ! prompt_password; then
+if [ "$DEBUG_NO_PASSWORD" != "1" ] && ! usb_configured && ! prompt_password; then
     echo "Too many wrong passwords. Closing session."
     exit 1
 fi
