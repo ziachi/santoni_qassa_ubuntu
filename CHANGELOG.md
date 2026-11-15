@@ -29,6 +29,7 @@
 | 23 | v20 | 2e0ceda | Add Spectrum kernel profile to XiaomiAddon (#23) |
 | 24 | v20 | d14747c | Update README + CHANGELOG for release (#24) |
 | 25 | v20 | 28593f0 | Remove incorrect credit from README (#25) |
+| 26 | v21 | - | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
 
 ## Releases
 
@@ -36,9 +37,47 @@
 |---------|------|-------|-------|
 | v20 | 2026-06-19 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20260619-0327-Vanilla-signed.zip | Clean build: Override removed, Dolby removed, PinnerService fixed, Spectrum added |
 
+## Headless VPS Migration (v21)
+
+The ROM is being repurposed from a daily-driver phone build into a headless
+Ubuntu 22.04 LTS (arm64) VPS server. Each task below is one commit.
+
+### #26 — Use prebuilt Luuvy kernel
+
+**Problem**
+The build required a full `kernel/xiaomi/msm8937` checkout, which is a separate
+multi-GB repo and a long compile. The target kernel is already published as a
+ready-made AnyKernel3 zip.
+
+**Trial-Error**
+- `curl` on the release asset URL returned a 9-byte `Not Found` body. The
+  `ziachi/v0backup` repo is private, so the anonymous download URL does not
+  work. Fixed by downloading through the authenticated CLI:
+  `gh release download v1.4.5 --repo ziachi/v0backup --pattern 'Luuvy-*.zip'`.
+- `gzip -t Image.gz-dtb` reports `trailing garbage ignored`. That is expected:
+  the file is a gzip kernel payload with the device tree blob appended, which
+  is exactly what `BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb` expects.
+
+**Fix**
+- Added `prebuilts/kernel/Image.gz-dtb` (Luuvy C.4.0.eol202601, Linux 4.9.228
+  arm64, sha256 `0aefe162…e86b9`) plus a `kernel.config` snapshot and a
+  provenance README.
+- `BoardConfig.mk` now sets `TARGET_PREBUILT_KERNEL` by default. Setting
+  `SANTONI_BUILD_KERNEL=1` restores the from-source kernel build.
+- A `$(warning)` fires at config time if the prebuilt image is missing, so the
+  failure is obvious instead of surfacing as a missing boot image.
+
+**Files**
+`BoardConfig.mk`, `prebuilts/kernel/Image.gz-dtb`, `prebuilts/kernel/kernel.config`,
+`prebuilts/kernel/README.md`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+`kernel/xiaomi/msm8937` is no longer required to build the ROM. The boot image
+is byte-identical to the published Luuvy kernel.
+
 ## Key Changes by Version
 
-### v20 (Latest)
+### v20
 - **Spectrum kernel profiles** added to XiaomiAddon (QS tile + Settings dropdown)
 - Profiles: Balance, Performance, Battery, Gaming
 - README cleanup

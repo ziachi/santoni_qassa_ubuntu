@@ -19,6 +19,7 @@
 | **Build type** | UNOFFICIAL |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
 | **SELinux** | Enforcing (always) |
+| **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.228 arm64 |
 | **Manifest** | `https://github.com/keepQASSA/manifest.git` branch `Q` |
 | **Maintainer** | [@kalomakan](https://t.me/kalomakan) / [ziachi](https://github.com/ziachi) |
 
@@ -33,7 +34,7 @@ All custom repos for this ROM. Clone each into the matching path inside the Qass
 |-- .repo/                                  <- repo tool metadata
 |-- device/xiaomi/santoni/                  <- THIS REPO (device tree)
 |-- vendor/xiaomi/santoni/                  <- Vendor blobs
-|-- kernel/xiaomi/msm8937/                  <- Kernel source
+|-- kernel/xiaomi/msm8937/                  <- Kernel source (OPTIONAL, see below)
 |-- frameworks/base/                        <- Framework patches (custom)
 |-- vendor/qassa/                           <- ROM vendor config (from repo sync)
 |-- vendor/ziachi-keys/                     <- Signing keys (NOT on GitHub)
@@ -111,10 +112,13 @@ rm -rf vendor/xiaomi/santoni
 git clone https://github.com/ziachi/vendor_xiaomi_santoni_qassa.git \
     vendor/xiaomi/santoni -b 10.0
 
-# Kernel
-rm -rf kernel/xiaomi/msm8937
-git clone https://github.com/ziachi/kernel_xiaomi_msm8937_qassa.git \
-    kernel/xiaomi/msm8937 -b 13
+# Kernel — OPTIONAL
+# The boot image is built from prebuilts/kernel/Image.gz-dtb (Luuvy C.4.0),
+# so this clone is only needed if you want to compile the kernel yourself.
+# If you do, also export SANTONI_BUILD_KERNEL=1 before building.
+# rm -rf kernel/xiaomi/msm8937
+# git clone https://github.com/ziachi/kernel_xiaomi_msm8937_qassa.git \
+#     kernel/xiaomi/msm8937 -b 13
 
 # Framework patches (on top of synced frameworks/base)
 cd frameworks/base

@@ -66,6 +66,20 @@ TARGET_KERNEL_LLVM_BINUTILS := false
 TARGET_KERNEL_ADDITIONAL_FLAGS := \
     HOSTCFLAGS="-fuse-ld=lld -Wno-unused-command-line-argument"
 
+# Prebuilt kernel (Luuvy C.4.0.eol202601, Linux 4.9.228 arm64)
+# Default: use the prebuilt Image.gz-dtb so kernel/xiaomi/msm8937 is optional.
+# Set SANTONI_BUILD_KERNEL=1 to compile from TARGET_KERNEL_SOURCE instead.
+ifneq ($(SANTONI_BUILD_KERNEL),1)
+    TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilts/kernel/Image.gz-dtb
+    ifeq ($(wildcard $(TARGET_PREBUILT_KERNEL)),)
+        $(warning **********************************************************)
+        $(warning Prebuilt kernel missing: $(TARGET_PREBUILT_KERNEL))
+        $(warning Restore it from prebuilts/kernel/README.md, or build the)
+        $(warning kernel from source with SANTONI_BUILD_KERNEL=1)
+        $(warning **********************************************************)
+    endif
+endif
+
 # Audio
 AUDIO_USE_LL_AS_PRIMARY_OUTPUT := true
 AUDIO_FEATURE_ENABLED_HIFI_AUDIO := true
