@@ -441,6 +441,19 @@ fstab. Everything logs under the `vps-boot:` tag:
 adb logcat -s vps-boot
 ```
 
+### Hardware bridges (disabled)
+
+Three bridge skeletons live in the device tree. Each ships as
+`Android.bp.disabled` with `enabled: false`, so Soong never parses the directory
+and the build is unchanged until the file is renamed to `Android.bp`.
+
+#### `webcam-bridge` — camera
+
+Camera2 NDK to MJPEG. `/dev/video*` on MSM8937 is not UVC, so the NDK is the
+only entry point. Missing: JPEG encode, the repeating request, and the MJPEG
+server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot —
+`cameraserver` rejects clients outside the `camera` group.
+
 ### Troubleshooting
 
 | Symptom | Cause | Fix |

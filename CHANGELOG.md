@@ -41,6 +41,7 @@
 | 35 | v21 | - | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
 | 36 | v22 | - | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
 | 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
+| 38 | v22 | - | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
 
 ## Releases
 
@@ -598,6 +599,45 @@ means a USB cable and ADB over Wi-Fi on 5555 both land in a root Ubuntu shell
 with no prompt; together with `ro.adb.secure=0` and `ro.secure=0` that is a
 debug-phase posture only, and `README.md` now says so. Set it back to `0` before
 the device leaves the bench — the gate is intact and takes over immediately.
+
+### #38 — webcam-bridge: Camera2 NDK to MJPEG, disabled
+
+**Problem**
+The chroot has no camera. `/dev/video0..3` on santoni are the legacy msm vidc
+nodes used by the old camera daemon, not V4L2 capture devices, so
+`ffmpeg -f v4l2` and `v4l2loopback` cannot open them and reading them yields
+nothing useful. The only supported entry point is the Camera2 NDK, which talks
+to `cameraserver` over binder.
+
+**Trial-Error**
+- Treating `/dev/video*` as UVC was the first assumption and it is wrong on this
+  SoC. There is no V4L2 capture node to hand to the chroot.
+- The NDK has no JPEG encoder, so `onImage()` can only log the `YUV_420_888`
+  frame size. Encoding needs a prebuilt `libjpeg-turbo` or a baseline encoder
+  written by hand; stubbing it out would have produced a bridge that silently
+  emits nothing.
+- `cameraserver` rejects clients that are not in the `camera` group. A root
+  process started from the chroot gets `ACAMERA_ERROR_CAMERA_DISCONNECTED` with
+  no useful message, which is a permission failure, not a camera failure.
+
+**Fix**
+- New `webcam-bridge/` with `webcam_bridge.cpp`: opens the first
+  backward-compatible camera through `ACameraManager`, creates a capture
+  session, and logs each `YUV_420_888` frame.
+- `webcam-bridge/Android.bp.disabled`: `cc_binary` with `enabled: false`. Soong
+  only reads files named `Android.bp`, so the directory is inert twice over.
+- `webcam-bridge/README.md`: records the three missing pieces (JPEG encode, the
+  repeating request, the MJPEG server on `127.0.0.1:8080`) and the UID caveat.
+
+**Files**
+`webcam-bridge/webcam_bridge.cpp`, `webcam-bridge/Android.bp.disabled`,
+`webcam-bridge/README.md`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+No build change: Soong never parses the directory. The skeleton compiles only
+after the file is renamed to `Android.bp` and `enabled` is flipped, and it is
+not a working stream until the three documented gaps are filled. The UID note
+saves the next person from debugging a permission failure as a camera failure.
 
 ## Key Changes by Version
 

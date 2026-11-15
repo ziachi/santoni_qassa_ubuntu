@@ -1,0 +1,18 @@
+// Disabled on purpose. Soong only reads files named Android.bp, so this file
+// is inert until it is renamed. `enabled: false` is kept as a second guard for
+// the moment someone renames it without reading this comment.
+cc_binary {
+    name: "webcam_bridge",
+    enabled: false,
+    srcs: ["webcam_bridge.cpp"],
+    shared_libs: [
+        "libcamera2ndk",
+        "libmediandk",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+    ],
+    cpp_std: "c++17",
+}
