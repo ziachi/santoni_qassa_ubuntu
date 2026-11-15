@@ -84,7 +84,8 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # Dual-auth login shell. adbd only honours persist.sys.adb.shell after the
 # patch in patches/README.md is applied to system/core/adb.
 PRODUCT_PACKAGES += \
-    ubuntu-enter
+    ubuntu-enter \
+    vps-setup
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

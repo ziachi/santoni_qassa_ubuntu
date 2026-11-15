@@ -293,6 +293,40 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
 > password gate is the only thing in front of it — firewall 5555 to trusted
 > networks if the device is ever exposed.
 
+### First setup (USB)
+
+Flash the ROM, plug in USB, then run one command:
+
+```bash
+adb shell vps-setup "MyWiFi" "MyWiFiPassword"
+```
+
+It does five things:
+
+1. `svc wifi enable`, wait for `wpa_supplicant`, then
+   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>`
+2. wait up to 30s for an IPv4 address on `wlan0`
+3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
+4. `tar -xzf` it into `/data/ubuntu` and create `dev`, `dev/pts`, `proc`,
+   `sys`, `tmp`, `run`
+5. write `/etc/resolv.conf` (8.8.8.8, 1.1.1.1) and an `apt` `sources.list` for
+   `ports.ubuntu.com`
+
+If the device has no `curl` and no `wget`, the script prints the `adb push`
+recipe instead of failing silently:
+
+```bash
+curl -LO https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz
+adb push ubuntu-base-22.04-base-arm64.tar.gz /data/local/tmp/ubuntu-base.tar.gz
+adb shell vps-setup "MyWiFi" "MyWiFiPassword"
+```
+
+After that, `adb shell` lands in Ubuntu as root. Finish the VPS:
+
+```bash
+apt update && apt install -y openssh-server
+```
+
 ## Kernel Capability Check
 
 The prebuilt kernel is verified against the options the Ubuntu chroot needs:

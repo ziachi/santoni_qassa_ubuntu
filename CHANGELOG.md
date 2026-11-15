@@ -33,7 +33,8 @@
 | 27 | v21 | e5f8c85 | [v21] santoni: Verify kernel config for chroot VPS (#27) |
 | 28 | v21 | 4d8f288 | [v21] santoni: Headless mode + SELinux permissive (#28) |
 | 29 | v21 | 0acc93c | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
-| 30 | v21 | - | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
+| 30 | v21 | 9d13e81 | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
+| 31 | v21 | - | [v21] santoni: vps-setup first-run installer (#31) |
 
 ## Releases
 
@@ -279,6 +280,50 @@ Android's shell.
   `adb shell` goes straight to `/system/bin/sh` — the gate never runs.
 - The gate covers `adb shell <command>` too, so scripted access over Wi-Fi
   needs `echo '<password>' | adb shell <command>`.
+
+### #31 — `vps-setup` first-run installer
+
+**Problem**
+A freshly flashed device has no Wi-Fi, no Ubuntu and no way to get either
+without a screen. The first setup has to be a single command over USB.
+
+**Trial-Error**
+- Android 10 has no `curl`. Toybox `wget` is not guaranteed to be enabled
+  either. The script probes `curl`, then `wget`, then `toybox wget`, and if all
+  three are missing it prints the exact `adb push` recipe for the host instead
+  of failing silently.
+- `cmd wifi connect-network` needs the security type as a positional argument
+  in Android 10: `connect-network <ssid> wpa2 <passphrase>`. Passing only the
+  passphrase fails.
+- `svc wifi enable` returns before `wpa_supplicant` is up, so the connect call
+  races it. The script polls `init.svc.wpa_supplicant` for up to 20s first.
+- `ip -4 addr show wlan0` is not always present; `getprop dhcp.wlan0.ipaddress`
+  is the fallback for reading the address.
+- The 22.04 release tarball name is `ubuntu-base-22.04-base-arm64.tar.gz`, but
+  point releases live under `22.04.5/release/`. Both URLs are tried.
+
+**Fix**
+`vps-setup/vps-setup.sh` installed to `/system/bin/vps-setup`:
+
+1. `svc wifi enable`, wait for `wpa_supplicant`, then
+   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>`.
+2. Poll for an IPv4 address on `wlan0` (30s).
+3. Download the Ubuntu 22.04 arm64 base rootfs to
+   `/data/local/tmp/ubuntu-base.tar.gz`.
+4. `tar -xzf` into `/data/ubuntu`, create `dev`, `dev/pts`, `proc`, `sys`,
+   `tmp`, `run`.
+5. Write `/etc/resolv.conf` (8.8.8.8, 1.1.1.1) and, when missing, an
+   `apt` `sources.list` for `ports.ubuntu.com` — without it `apt update` fails
+   and the VPS is unusable.
+
+**Files**
+`vps-setup/vps-setup.sh`, `vps-setup/Android.mk`, `qassa_santoni.mk`,
+`CHANGELOG.md`, `README.md`
+
+**Impact**
+`adb shell vps-setup <SSID> <PASSWORD>` over USB takes a blank device to a
+bootable Ubuntu 22.04 chroot. Re-running it re-extracts the rootfs over the
+existing one.
 
 ## Key Changes by Version
 
