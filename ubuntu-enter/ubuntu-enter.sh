@@ -5,8 +5,8 @@
 #   USB attached (gadget CONFIGURED)  -> straight in, no password
 #   Wi-Fi only (gadget DISCONNECTED)  -> hidden password prompt, 3 tries, exit 1
 #
-# DEBUG_NO_PASSWORD=1 below disables the Wi-Fi prompt entirely. See the note
-# there before shipping a build with it set.
+# DEBUG_NO_PASSWORD=0 below keeps the Wi-Fi prompt active. Setting it to 1
+# disables the prompt on every transport; read the note there before doing so.
 #
 # The Wi-Fi password lives in /data/adb_wifi_pass and defaults to
 # "santoniadmin". Change it with:
@@ -27,9 +27,9 @@ MAX_TRIES=3
 #
 # This is a debug-phase setting. Together with ro.adb.secure=0 and ro.secure=0
 # it means anyone who can reach port 5555 is root, so it is only acceptable
-# while the device sits on a trusted LAN. Set it back to 0 before the device
-# leaves the bench; the gate below is intact and takes over immediately.
-DEBUG_NO_PASSWORD=1
+# while the device sits on a trusted LAN. It is 0 here, so the gate below is
+# active: USB lands straight in, Wi-Fi asks for the password.
+DEBUG_NO_PASSWORD=0
 
 usb_configured() {
     state=""

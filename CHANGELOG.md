@@ -43,7 +43,8 @@
 | 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
 | 38 | v22 | - | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
 | 39 | v22 | - | [v22] santoni: audio-bridge skeleton — PulseAudio over OpenSL ES (#39) |
-| 40 | v22 | - | [v22] santoni: sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp (#40) |
+| 40 | v22 | de32ed6 | [v22] santoni: sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp (#40) |
+| 41 | v22 | - | [v22] santoni: Re-enable the ADB over Wi-Fi password gate (#41) |
 
 ## Releases
 
@@ -711,6 +712,38 @@ No build change: Soong never parses the directory. The log is append-only and
 never rotated, so a device left running for days grows it without bound; that
 is recorded as a known gap rather than left to be discovered. Only the four
 sensor types above are handled.
+
+### #41 — Re-enable the ADB over Wi-Fi password gate
+
+**Problem**
+`ubuntu-enter` shipped with `DEBUG_NO_PASSWORD=1`, which skipped the password
+prompt on every transport. Combined with `ro.adb.secure=0` and port 5555 open,
+anyone on the LAN had a root shell with no credential at all. The gate code was
+intact but unreachable.
+
+**Trial-Error**
+- Flipping the flag alone is not enough: the header comment and the README both
+  documented `=1` as the current state, so the next reader would have "fixed"
+  it back.
+- The README table listed `DEBUG_NO_PASSWORD=1` as a connection mode next to
+  USB and Wi-Fi, which reads as if it were a transport rather than a switch.
+
+**Fix**
+- `ubuntu-enter/ubuntu-enter.sh`: `DEBUG_NO_PASSWORD=0`. USB (`CONFIGURED`)
+  still lands straight in; Wi-Fi now prompts for `/data/adb_wifi_pass`
+  (default `santoniadmin`), 3 tries, then the session is closed.
+- Header comment and the DEBUG MODE block now describe `=0` as the shipped
+  state and `=1` as the bench-only escape hatch.
+- `README.md`: the debug-phase note and the login-shell table match the new
+  default, and `=1` is documented as a switch rather than a transport.
+
+**Files**
+`ubuntu-enter/ubuntu-enter.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+ADB over Wi-Fi requires the password again. USB access is unchanged, so
+`vps-setup` and recovery over the cable still need no credential. Anyone who
+relied on passwordless Wi-Fi access must now feed the password on stdin.
 
 ## Key Changes by Version
 

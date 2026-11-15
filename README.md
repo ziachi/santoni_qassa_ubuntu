@@ -306,11 +306,11 @@ adb connect 192.168.1.50:5555
 adb -s 192.168.1.50:5555 shell
 ```
 
-> **Debug-phase access only.** `ro.adb.secure=0`, `ro.secure=0` and ADB over
-> Wi-Fi on 5555 without authentication mean anyone who can reach port 5555 is
-> root. That is deliberate while the device sits on the bench on a trusted
-> LAN, and it is not a shipping configuration. `ubuntu-enter` also runs with
-> `DEBUG_NO_PASSWORD=1`, which removes the Wi-Fi password gate entirely.
+> **Debug-phase access only.** `ro.adb.secure=0` and `ro.secure=0` mean anyone
+> who can reach port 5555 is root once they pass the gate. That is deliberate
+> while the device sits on the bench on a trusted LAN, and it is not a shipping
+> configuration. `ubuntu-enter` runs with `DEBUG_NO_PASSWORD=0`, so the Wi-Fi
+> password gate is active: USB lands straight in, Wi-Fi asks for the password.
 
 ### Login shell: `ubuntu-enter`
 
@@ -321,7 +321,8 @@ through a dual-auth wrapper:
 |---|---|
 | USB attached (`/sys/class/android_usb/android0/state` = `CONFIGURED`) | straight in, no password |
 | Wi-Fi only (`DISCONNECTED`) | `ADB Wi-Fi Password:` prompt, 3 tries, then the session is closed |
-| `DEBUG_NO_PASSWORD=1` (current) | the prompt is skipped on every transport — debug phase only |
+| `DEBUG_NO_PASSWORD=0` (current) | gate active — the two rows above apply |
+| `DEBUG_NO_PASSWORD=1` | prompt skipped on every transport — debug only, never ship |
 | Ubuntu installed (`/data/ubuntu/bin/bash`) | `chroot /data/ubuntu /bin/bash -l` as root |
 | Ubuntu not installed | drops to `/system/bin/sh` with a hint to run `vps-setup` |
 
