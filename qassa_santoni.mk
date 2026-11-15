@@ -94,7 +94,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # patch in patches/README.md is applied to system/core/adb.
 PRODUCT_PACKAGES += \
     ubuntu-enter \
-    vps-setup
+    vps-setup \
+    init.ubuntu.sh \
+    init.ubuntu.rc
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

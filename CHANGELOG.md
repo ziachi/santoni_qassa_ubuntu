@@ -47,6 +47,7 @@
 | 41 | v22 | e4e1218 | [v22] santoni: Re-enable the ADB over Wi-Fi password gate (#41) |
 | 42 | v22 | - | [v22] santoni: Fix 5 documentation bugs and script step labels (#42) |
 | 43 | v22 | - | [v22] santoni: Add qassa-ubuntu branches + kernel headers requirement (#43) |
+| 44 | v22 | - | [v22] santoni: Wire init.ubuntu.sh + init.ubuntu.rc into the build (#44) |
 
 ## Releases
 
