@@ -58,3 +58,38 @@ adb shell                                  # should prompt over Wi-Fi
 
 > This patch is not upstream. Re-apply it after every `repo sync` that touches
 > `system/core`.
+
+## `cmd wifi connect-network`
+
+**Why:** Android 11 added `connect-network` to `cmd wifi`. Android 10 has no
+shell command that can join a network at all — `WifiShellCommand` only exposes
+`set-ipreach-disconnect`, `send-link-probe`, the network-suggestion commands and
+the country-code commands. A headless build has no Settings UI, so without this
+backport the device can never get on Wi-Fi and `vps-setup` cannot download the
+rootfs.
+
+**Apply:**
+
+```bash
+cd ~/qassa
+device/xiaomi/santoni/patches/apply-wifi-connect-network.py .
+```
+
+The script is idempotent and prints `already patched` on a second run.
+
+**What it changes:** `WifiShellCommand.java` gains a `connect-network` case, the
+`connectNetwork()` method behind it and the matching `onHelp` line. The command
+saves the network through `WifiConfigManager` and calls
+`ClientModeImpl.startConnectToNetwork()`, so DHCP, DNS and the network agent stay
+with the framework — the same path `WifiManager.connect()` takes.
+
+**Verify after building:**
+
+```bash
+adb shell cmd wifi help | grep connect-network
+adb shell cmd wifi connect-network "MyWiFi" wpa2 "MyWiFiPassword"
+adb shell ip -4 addr show wlan0
+```
+
+> This patch is not upstream. Re-apply it after every `repo sync` that touches
+> `frameworks/opt/net/wifi`.

@@ -38,12 +38,23 @@ while [ "$i" -lt 20 ]; do
     i=$((i + 1))
 done
 
+# `cmd wifi connect-network` is an Android 11 command. Android 10 has no shell
+# command that can join a network, so this build carries a backport from
+# patches/apply-wifi-connect-network.py. Say so instead of dying on the bare
+# "Unknown command" the shell prints.
+if ! cmd wifi help 2>&1 | grep -q "connect-network"; then
+    echo "vps-setup: this build's 'cmd wifi' has no connect-network command." >&2
+    echo "vps-setup: apply patches/apply-wifi-connect-network.py to the source" >&2
+    echo "vps-setup: tree and rebuild, then re-run vps-setup." >&2
+    exit 1
+fi
+
 cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" || die "cmd wifi connect-network failed"
 
 echo "[2/7] Waiting for an IP address"
 ip_addr=""
 i=0
-while [ "$i" -lt 30 ]; do
+while [ "$i" -lt 45 ]; do
     ip_addr=$(ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1)
     [ -n "$ip_addr" ] && break
     ip_addr=$(getprop dhcp.wlan0.ipaddress 2>/dev/null)
@@ -51,7 +62,7 @@ while [ "$i" -lt 30 ]; do
     sleep 1
     i=$((i + 1))
 done
-[ -n "$ip_addr" ] || die "no IP on wlan0 after 30s — check the SSID and password"
+[ -n "$ip_addr" ] || die "no IP on wlan0 after 45s — check the SSID and password"
 echo "      wlan0 = $ip_addr"
 
 # ------------------------------------------------------------- 2. Download

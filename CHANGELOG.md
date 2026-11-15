@@ -51,6 +51,7 @@
 | 45 | v22 | - | [v22] santoni: Enable webcam/audio/sensor bridges (#45) |
 | 46 | v22 | - | [v22] santoni: Install init.ubuntu.sh to system/bin 0755 and its rc to system/etc/init (#46) |
 | 47 | v22 | - | [v22] santoni: Fix const ASensor* in sensor_bridge (#47) |
+| 48 | v22 | - | [v22] santoni: Backport cmd wifi connect-network for Android 10 (#48) |
 
 ## Releases
 

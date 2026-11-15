@@ -392,8 +392,9 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 It does seven things:
 
 1. `svc wifi enable`, wait for `wpa_supplicant`, then
-   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>`
-2. wait up to 30s for an IPv4 address on `wlan0`
+   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>` — a backport, Android 10
+   has no such command upstream, see [patches/README.md](patches/README.md)
+2. wait up to 45s for an IPv4 address on `wlan0`
 3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
 4. `tar -xzf` it into `/data/ubuntu` and create `dev`, `dev/pts`, `proc`,
    `sys`, `tmp`, `run`
@@ -480,7 +481,8 @@ is append-only and never rotated.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `vps-setup: no IP on wlan0 after 30s` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `vps-setup: no IP on wlan0 after 45s` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `Unknown command: connect-network` | the build predates the Android 10 backport | apply `patches/apply-wifi-connect-network.py` and rebuild |
 | `vps-setup: no downloader on the device` | no `curl` and no `wget` | use the `adb push` recipe the script prints |
 | `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
