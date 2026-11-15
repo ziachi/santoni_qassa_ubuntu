@@ -219,6 +219,7 @@ grep -i "error\|fail" /tmp/build.log  # check errors
 - SELinux permissive (headless VPS build)
 - Maintainer info embedded in build.prop
 - Ubuntu chroot auto-start: `init.ubuntu.sh` in `/system/bin`, `init.ubuntu.rc` in `/system/etc/init`
+- Bridge binaries: `webcam_bridge`, `sensor_bridge`, `pulse-default.pa`
 
 ---
 

@@ -1,9 +1,6 @@
-// Disabled on purpose. Soong only reads files named Android.bp, so this file
-// is inert until it is renamed. `enabled: false` is kept as a second guard for
-// the moment someone renames it without reading this comment.
+// Camera2 NDK to MJPEG bridge. Enabled in v22 — see README.md.
 cc_binary {
     name: "webcam_bridge",
-    enabled: false,
     srcs: ["webcam_bridge.cpp"],
     shared_libs: [
         "libcamera2ndk",

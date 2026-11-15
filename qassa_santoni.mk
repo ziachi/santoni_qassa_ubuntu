@@ -96,7 +96,10 @@ PRODUCT_PACKAGES += \
     ubuntu-enter \
     vps-setup \
     init.ubuntu.sh \
-    init.ubuntu.rc
+    init.ubuntu.rc \
+    webcam_bridge \
+    sensor_bridge \
+    pulse-default.pa
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

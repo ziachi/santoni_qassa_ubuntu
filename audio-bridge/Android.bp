@@ -1,12 +1,7 @@
-// Disabled on purpose. Soong only reads files named Android.bp, so this file
-// is inert until it is renamed. `enabled: false` is kept as a second guard for
-// the moment someone renames it without reading this comment.
-//
 // This only installs the config. The PulseAudio arm64 binary and the OpenSL ES
 // modules are not in this tree — see README.md.
 prebuilt_etc {
     name: "pulse-default.pa",
-    enabled: false,
     src: "pulse-default.pa",
     sub_dir: "pulse",
     filename_from_src: true,

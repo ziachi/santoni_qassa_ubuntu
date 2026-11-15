@@ -1,0 +1,14 @@
+// ASensorManager to /data/ubuntu/tmp bridge. Enabled in v22 — see README.md.
+cc_binary {
+    name: "sensor_bridge",
+    srcs: ["sensor_bridge.cpp"],
+    shared_libs: [
+        "libandroid",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+    ],
+    cpp_std: "c++17",
+}
