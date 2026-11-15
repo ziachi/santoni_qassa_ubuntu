@@ -58,20 +58,24 @@ TARGET_COMPILE_WITH_MSM_KERNEL := true
 TARGET_KERNEL_CONFIG := santoni_treble_defconfig
 TARGET_KERNEL_SOURCE := kernel/xiaomi/msm8937
 TARGET_KERNEL_CLANG_COMPILE := true
-TARGET_KERNEL_CLANG_VERSION := zyc_clang
+TARGET_KERNEL_CLANG_VERSION := clang-r353983c1
 TARGET_KERNEL_CLANG_PATH := $(shell pwd)/prebuilts/clang/host/linux-x86/$(TARGET_KERNEL_CLANG_VERSION)
-TARGET_KERNEL_CROSS_COMPILE_PREFIX := $(TARGET_KERNEL_CLANG_PATH)/bin/aarch64-linux-gnu-
-TARGET_KERNEL_CROSS_COMPILE_ARM32_PREFIX := $(TARGET_KERNEL_CLANG_PATH)/bin/arm-linux-gnueabi-
+TARGET_KERNEL_CROSS_COMPILE_PREFIX := $(shell pwd)/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+TARGET_KERNEL_CROSS_COMPILE_ARM32_PREFIX := $(shell pwd)/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/bin/arm-linux-androidkernel-
 TARGET_KERNEL_LLVM_BINUTILS := false
 
 TARGET_KERNEL_ADDITIONAL_FLAGS := \
     HOSTCFLAGS="-fuse-ld=lld -Wno-unused-command-line-argument"
 
 # Prebuilt kernel (Luuvy C.4.0.eol202601, Linux 4.9.228 arm64)
-# Default: use the prebuilt Image.gz-dtb so kernel/xiaomi/msm8937 is optional.
+# The boot image is always the prebuilt Image.gz-dtb. kernel/xiaomi/msm8937 is
+# still required in the tree, but only for headers_install (README Step 2).
 # Set SANTONI_BUILD_KERNEL=1 to compile from TARGET_KERNEL_SOURCE instead.
 ifneq ($(SANTONI_BUILD_KERNEL),1)
     TARGET_PREBUILT_KERNEL := $(DEVICE_PATH)/prebuilts/kernel/Image.gz-dtb
+    # kernel.mk switches to FULL_KERNEL_BUILD as soon as KERNEL_SRC exists, so
+    # the headers checkout would otherwise trigger a full kernel compile.
+    TARGET_FORCE_PREBUILT_KERNEL := true
     ifeq ($(wildcard $(TARGET_PREBUILT_KERNEL)),)
         $(warning **********************************************************)
         $(warning Prebuilt kernel missing: $(TARGET_PREBUILT_KERNEL))
