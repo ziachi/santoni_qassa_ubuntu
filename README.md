@@ -107,10 +107,12 @@ rm -rf device/xiaomi/santoni
 git clone https://github.com/ziachi/santoni_qassa_ubuntu.git \
     device/xiaomi/santoni -b main
 
-# Vendor blobs
+# Vendor blobs — the repo root is vendor/xiaomi, its content is santoni/.
+# Cloning into vendor/xiaomi/santoni nests it one level too deep and lunch
+# then dies with "vendor/xiaomi/santoni/santoni-vendor.mk does not exist".
 rm -rf vendor/xiaomi/santoni
 git clone https://github.com/ziachi/vendor_xiaomi_santoni_qassa.git \
-    vendor/xiaomi/santoni -b 10.0
+    vendor/xiaomi -b 10.0
 
 # Kernel — OPTIONAL
 # The boot image is built from prebuilts/kernel/Image.gz-dtb (Luuvy C.4.0),
@@ -572,7 +574,7 @@ mka qassa -j$(nproc)
 |------|-----|
 | Add prebuilt app | Put APK + Android.mk in `device/xiaomi/santoni/<AppName>/`, add to device.mk PRODUCT_PACKAGES |
 | Change build prop | Edit `system.prop` or `qassa_santoni.mk` PRODUCT_PROPERTY_OVERRIDES |
-| Fix SELinux denial | Add rules to `sepolicy/vendor/`, NEVER set permissive |
+| Fix SELinux denial | Add rules to `sepolicy/vendor/`. The headless VPS build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
 | Debloat system app | Add entry to `debloat/Android.bp` |
 | Add overlay | Put XML in `overlay/` or `overlay-lineage/` |
 | Update kernel config | Edit defconfig in `kernel/xiaomi/msm8937` |
@@ -605,6 +607,25 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 | # | Version | Hash | Change |
 |---|---------|------|--------|
+| 42 | v22 | - | Fix 5 documentation bugs and script step labels |
+| 41 | v22 | e4e1218 | Re-enable the ADB over Wi-Fi password gate |
+| 40 | v22 | de32ed6 | sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp |
+| 39 | v22 | e20515e | audio-bridge skeleton — PulseAudio over OpenSL ES |
+| 38 | v22 | b77a14f | webcam-bridge skeleton — Camera2 NDK to MJPEG |
+| 37 | v22 | 01bf948 | rbind /dev into the chroot, install sshd, open debug access |
+| 36 | v22 | 37e5a28 | restore surfaceflinger and verify minimal headless packages |
+| 35 | v21 | cdc76d5 | Create /data/adb_wifi_pass on first boot |
+| 34 | v21 | 79bf7e9 | Point docs at the working repo |
+| 33 | v21 | c2a13e3 | Operational guide — quick start, password, troubleshooting |
+| 32 | v21 | 7beb938 | Auto-start Ubuntu, wake lock, ZRAM 2 GB |
+| 31 | v21 | 552ab0c | vps-setup first-run installer |
+| 30 | v21 | 9d13e81 | Dual-auth login shell ubuntu-enter |
+| 29 | v21 | 0acc93c | ADB over USB without signature + Wi-Fi 5555 |
+| 28 | v21 | 4d8f288 | Headless mode + SELinux permissive |
+| 27 | v21 | e5f8c85 | Verify kernel config for chroot VPS |
+| 26 | v21 | 8f96ca1 | Use prebuilt Luuvy kernel |
+| 25 | v20 | 28593f0 | Remove incorrect credit from README |
+| 24 | v20 | d14747c | Update README + CHANGELOG for release |
 | 23 | v20 | 2e0ceda | Add Spectrum kernel profile to XiaomiAddon |
 | 22 | v19 | 727c886 | Fix PinnerService path for flattened APEX |
 | 21 | v18 | c687798 | Fix PinnerService APEX path for Android 10 |
@@ -618,9 +639,16 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 | 13 | v15 | aa0fc5d | Remove Dolby from device tree |
 | 12 | v15 | 60526f3 | SEPolicy cleanup — remove non-existent types |
 | 11 | - | 0a1ca39 | Fix 6 bugs from V14 logcat analysis |
-| 9 | - | d3098f2 | Add bug analysis docs + update README |
-| 8 | - | 4032e6f | Fix privapp-permissions bootloop |
-| 6 | - | 03332ae | Fix allocator@3.0 bootloop + update docs |
+| 10 | - | d3098f2 | Add bug analysis docs + update README |
+| 9 | - | 4032e6f | Fix privapp-permissions bootloop |
+| 8 | - | 34e7353 | Fix credits description |
+| 7 | - | 03332ae | Fix allocator@3.0 bootloop + update docs |
+| 6 | - | 1a9ad2c | Revamp README.md to match Matrixx quality |
+| 5 | - | 392348c | Adapt session rules: add CHANGELOG.md + update README |
+| 4 | - | 172d3f8 | Add ziachi maintainer customizations |
+| 3 | - | cbca51a | Add custom releasetools with credit injection |
+| 2 | - | e187228 | Fix dex2oat duplicate compiler filter crash |
+| 1 | - | db62dda | Update defconfig |
 
 ---
 

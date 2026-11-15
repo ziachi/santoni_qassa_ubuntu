@@ -36,15 +36,16 @@
 | 30 | v21 | 9d13e81 | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
 | 31 | v21 | 552ab0c | [v21] santoni: vps-setup first-run installer (#31) |
 | 32 | v21 | 7beb938 | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
-| 33 | v21 | - | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
-| 34 | v21 | - | [v21] santoni: Point docs at the working repo (#34) |
-| 35 | v21 | - | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
-| 36 | v22 | - | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
-| 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
-| 38 | v22 | - | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
-| 39 | v22 | - | [v22] santoni: audio-bridge skeleton — PulseAudio over OpenSL ES (#39) |
+| 33 | v21 | c2a13e3 | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
+| 34 | v21 | 79bf7e9 | [v21] santoni: Point docs at the working repo (#34) |
+| 35 | v21 | cdc76d5 | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
+| 36 | v22 | 37e5a28 | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
+| 37 | v22 | 01bf948 | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
+| 38 | v22 | b77a14f | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
+| 39 | v22 | e20515e | [v22] santoni: audio-bridge skeleton — PulseAudio over OpenSL ES (#39) |
 | 40 | v22 | de32ed6 | [v22] santoni: sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp (#40) |
-| 41 | v22 | - | [v22] santoni: Re-enable the ADB over Wi-Fi password gate (#41) |
+| 41 | v22 | e4e1218 | [v22] santoni: Re-enable the ADB over Wi-Fi password gate (#41) |
+| 42 | v22 | - | [v22] santoni: Fix 5 documentation bugs and script step labels (#42) |
 
 ## Releases
 
@@ -744,6 +745,53 @@ intact but unreachable.
 ADB over Wi-Fi requires the password again. USB access is unchanged, so
 `vps-setup` and recovery over the cable still need no credential. Anyone who
 relied on passwordless Wi-Fi access must now feed the password on stdin.
+
+### #42 — Fix 5 documentation bugs and script step labels
+
+**Problem**
+Five documentation defects made the guide actively misleading:
+1. `vps-setup/vps-setup.sh` printed `[1/6]`..`[5/6]` then `[6/7]`..`[7/7]`, so
+   the progress counter contradicted itself mid-run.
+2. README Step 2 cloned the vendor repo into `vendor/xiaomi/santoni`, but that
+   repo has a `santoni/` wrapper at its root, so the checkout landed at
+   `vendor/xiaomi/santoni/santoni/` and `lunch` died with
+   `"vendor/xiaomi/santoni/santoni-vendor.mk" does not exist`.
+3. The "For AI Agents" table still said "Fix SELinux denial — NEVER set
+   permissive", contradicting Hard Rule #2, which makes permissive the shipped
+   state for the headless VPS build.
+4. The README Commit History table stopped at #23 and had off-by-one numbers
+   for #7, #9 and #10 relative to CHANGELOG.md.
+5. CHANGELOG.md still had `-` in the Hash column for #33–#40.
+
+**Trial-Error**
+- The vendor path cannot be fixed by moving files after the clone: the wrapper
+  directory is part of the repo, so the clone target itself has to be
+  `vendor/xiaomi`. Documenting a post-clone `mv` would have been a second
+  thing to get wrong.
+- The Commit History table could not simply be extended from #23: three of its
+  existing rows disagreed with CHANGELOG.md, so the whole table was rebuilt
+  from `git log` rather than appended to.
+- #42's own hash cannot appear in the table it is committed with, so that row
+  stays `-` until the next commit touches the file.
+
+**Fix**
+- `vps-setup/vps-setup.sh`: all seven steps now print `[N/7]`.
+- `README.md` Step 2: clone target is `vendor/xiaomi`, with a comment naming
+  the exact `lunch` error the old path produced.
+- `README.md` "For AI Agents": the SELinux row now matches Hard Rule #2 —
+  permissive is the shipped state, denials are logged rather than fatal, and
+  the rule still has to be fixed for a phone build.
+- `README.md` Commit History: rebuilt from `git log`, #42 down to #1, with the
+  #7/#9/#10 numbering corrected.
+- `CHANGELOG.md`: hashes filled in for #33–#41.
+
+**Files**
+`vps-setup/vps-setup.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+No build change. A fresh clone following Step 2 now produces a tree `lunch`
+accepts, the installer's progress counter is consistent, and the agent-facing
+rules no longer contradict the SELinux policy the build actually ships.
 
 ## Key Changes by Version
 
