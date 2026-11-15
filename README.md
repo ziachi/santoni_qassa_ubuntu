@@ -259,8 +259,39 @@ adb connect 192.168.1.50:5555
 adb -s 192.168.1.50:5555 shell
 ```
 
+### Login shell: `ubuntu-enter`
+
+`persist.sys.adb.shell=/system/bin/ubuntu-enter` makes every adb session go
+through a dual-auth wrapper:
+
+| Connection | Behaviour |
+|---|---|
+| USB attached (`/sys/class/android_usb/android0/state` = `CONFIGURED`) | straight in, no password |
+| Wi-Fi only (`DISCONNECTED`) | `ADB Wi-Fi Password:` prompt, 3 tries, then the session is closed |
+| Ubuntu installed (`/data/ubuntu/bin/bash`) | `chroot /data/ubuntu /bin/bash -l` as root |
+| Ubuntu not installed | drops to `/system/bin/sh` with a hint to run `vps-setup` |
+
+Default password: **`santoniadmin`**. It is read from `/data/adb_wifi_pass`:
+
+```bash
+# change it (over USB, no password needed)
+adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
+```
+
+Scripted access over Wi-Fi is gated too, so feed the password on stdin:
+
+```bash
+echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
+```
+
+> **Requires the adb patch.** AOSP hard-codes the adb shell to
+> `/system/bin/sh`; `persist.sys.adb.shell` is only honoured after
+> `patches/apply-adb-shell-override.py` has been applied to the synced source.
+> See [patches/README.md](patches/README.md).
+
 > **Security:** port 5555 gives a root shell to anyone who can reach it. The
-> `ubuntu-enter` password gate (#30) is what stands in front of it.
+> password gate is the only thing in front of it — firewall 5555 to trusted
+> networks if the device is ever exposed.
 
 ## Kernel Capability Check
 

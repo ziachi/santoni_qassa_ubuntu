@@ -78,7 +78,13 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.adb.secure=0 \
     ro.secure=0 \
     ro.debuggable=1 \
-    service.adb.tcp.port=5555
+    service.adb.tcp.port=5555 \
+    persist.sys.adb.shell=/system/bin/ubuntu-enter
+
+# Dual-auth login shell. adbd only honours persist.sys.adb.shell after the
+# patch in patches/README.md is applied to system/core/adb.
+PRODUCT_PACKAGES += \
+    ubuntu-enter
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

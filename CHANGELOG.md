@@ -32,7 +32,8 @@
 | 26 | v21 | 8f96ca1 | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
 | 27 | v21 | e5f8c85 | [v21] santoni: Verify kernel config for chroot VPS (#27) |
 | 28 | v21 | 4d8f288 | [v21] santoni: Headless mode + SELinux permissive (#28) |
-| 29 | v21 | - | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
+| 29 | v21 | 0acc93c | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
+| 30 | v21 | - | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
 
 ## Releases
 
@@ -224,6 +225,60 @@ PRODUCT_PROPERTY_OVERRIDES += \
 - No MTP: the device no longer shows up as a file-transfer device.
 - **Security:** anyone on the same network who can reach port 5555 gets a root
   shell. The password gate in #30 is what protects it.
+
+### #30 — Dual-auth login shell `ubuntu-enter`
+
+**Problem**
+`ro.adb.secure=0` plus `service.adb.tcp.port=5555` means anyone who can reach
+port 5555 gets a root shell. USB is physically trusted; Wi-Fi is not. The two
+paths need different treatment, and the session should land in Ubuntu, not in
+Android's shell.
+
+**Trial-Error**
+- `read -s` does **not** hide input in mksh. In mksh `-s` means "save the line
+  in the history file". The prompt has to use `stty -echo` / `stty echo`
+  around a plain `read -r`.
+- AOSP hard-codes the device-side adb shell in
+  `system/core/adb/daemon/services.cpp` (`#define SHELL_COMMAND "/system/bin/sh"`).
+  There is no upstream property for it, so `persist.sys.adb.shell` alone does
+  nothing. Added `patches/apply-adb-shell-override.py`, an idempotent script
+  that rewrites the define to read the property. This is the one change that
+  cannot live in the device tree.
+- adbd runs `<shell> -c <command>` for `adb shell <command>`. Without handling
+  `-c` the wrapper would swallow the command and drop into an interactive
+  session. The script authenticates first, then `exec`s
+  `/system/bin/sh -c "$*"`, so `echo 'santoniadmin' | adb shell getprop` still
+  works and is still gated.
+- `/sys/class/android_usb/android0/state` is the reliable USB signal; it reads
+  `CONFIGURED` only when a host is actually attached. `sys.usb.state` is the
+  fallback when the sysfs node is missing.
+
+**Fix**
+- `ubuntu-enter/ubuntu-enter.sh` installed to `/system/bin/ubuntu-enter`:
+  - USB `CONFIGURED` → straight in, no password.
+  - Otherwise → `ADB Wi-Fi Password:` prompt, 3 tries, then `exit 1`.
+  - Password read from `/data/adb_wifi_pass`, default `santoniadmin`.
+  - On success: bind-mount `/dev`, `/dev/pts`, `/proc`, `/sys` into
+    `/data/ubuntu` and `exec chroot /data/ubuntu /bin/bash -l`. If
+    `/data/ubuntu/bin/bash` is missing, drop to `/system/bin/sh` with a hint to
+    run `vps-setup`.
+- `persist.sys.adb.shell=/system/bin/ubuntu-enter` in
+  `PRODUCT_PROPERTY_OVERRIDES`.
+- `patches/README.md` documents the adb patch and the manual fallback.
+
+**Files**
+`ubuntu-enter/ubuntu-enter.sh`, `ubuntu-enter/Android.mk`,
+`patches/apply-adb-shell-override.py`, `patches/README.md`,
+`qassa_santoni.mk`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+- Interactive `adb shell` over Wi-Fi requires the password; over USB it does
+  not.
+- The session lands in Ubuntu 22.04 as root once it is installed.
+- **Requires the adb patch.** Without it `persist.sys.adb.shell` is ignored and
+  `adb shell` goes straight to `/system/bin/sh` — the gate never runs.
+- The gate covers `adb shell <command>` too, so scripted access over Wi-Fi
+  needs `echo '<password>' | adb shell <command>`.
 
 ## Key Changes by Version
 
