@@ -43,6 +43,7 @@
 | 37 | v22 | - | [v22] santoni: rbind /dev into the chroot, install sshd, open debug access (#37) |
 | 38 | v22 | - | [v22] santoni: webcam-bridge skeleton — Camera2 NDK to MJPEG (#38) |
 | 39 | v22 | - | [v22] santoni: audio-bridge skeleton — PulseAudio over OpenSL ES (#39) |
+| 40 | v22 | - | [v22] santoni: sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp (#40) |
 
 ## Releases
 
@@ -677,6 +678,39 @@ until the arm64 PulseAudio binary and the OpenSL ES modules exist in
 `/data/ubuntu/usr/lib/pulse-*/modules/`. Going through OpenSL ES keeps the HAL
 in charge of the mixer and the output path instead of racing it for the PCM
 device.
+
+### #40 — sensor-bridge: ASensorManager to /data/ubuntu/tmp, disabled
+
+**Problem**
+The chroot has no sensor data. `/dev/input/event*` is owned by `system:input`
+and the Android input stack already has those devices open, so a chroot reader
+competes with `system_server` for the same evdev queue: events are split
+between the two readers instead of duplicated.
+
+**Trial-Error**
+- Reading `/dev/input` directly loses events rather than sharing them, which is
+  worse than no data because it looks like a flaky sensor.
+- A unix socket would be the better transport, but the file is simpler to
+  inspect while the bridge is still a skeleton, so the file came first and the
+  socket is recorded as the follow-up.
+
+**Fix**
+- New `sensor-bridge/sensor_bridge.cpp`: opens `ASensorManager`, enables the
+  accelerometer, gyroscope, magnetometer and proximity sensors the device
+  reports, and appends one line per sample to `/data/ubuntu/tmp/sensors.log`.
+- `sensor-bridge/Android.bp.disabled`: `cc_binary` with `enabled: false`.
+- `sensor-bridge/README.md`: documents the log format, the `/dev/input` reason,
+  and the two known gaps.
+
+**Files**
+`sensor-bridge/sensor_bridge.cpp`, `sensor-bridge/Android.bp.disabled`,
+`sensor-bridge/README.md`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+No build change: Soong never parses the directory. The log is append-only and
+never rotated, so a device left running for days grows it without bound; that
+is recorded as a known gap rather than left to be discovered. Only the four
+sensor types above are handled.
 
 ## Key Changes by Version
 

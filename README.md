@@ -461,6 +461,12 @@ sink/source go through OpenSL ES so the Android audio HAL keeps the mixer. The
 arm64 PulseAudio binary and the `module-sles-*` modules are **not** in this
 tree; the config fails to load until they are installed in the chroot.
 
+#### `sensor-bridge` — sensors
+
+`ASensorManager` to `/data/ubuntu/tmp/sensors.log`, one line per sample. Reading
+`/dev/input` directly would split the evdev queue with `system_server`. The log
+is append-only and never rotated.
+
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
