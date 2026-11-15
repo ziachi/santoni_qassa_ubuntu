@@ -251,9 +251,9 @@ network from then on.
 | Change | Where |
 |---|---|
 | `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
-| `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `qassa_santoni.mk` (`PRODUCT_PACKAGES` filter-out) + `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES`) |
-| `service surfaceflinger` → `disabled` | `rootdir/init.target.rc` |
-| `service bootanim` → `disabled` | `rootdir/init.target.rc` |
+| `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| `service surfaceflinger` kept enabled | `rootdir/init.target.rc` |
+| `service bootanim` kept enabled, `debug.sf.nobootanimation=1` | `rootdir/init.target.rc`, `qassa_santoni.mk` |
 | ADB over USB without the RSA prompt, ADB over Wi-Fi on 5555 | `qassa_santoni.mk` (`PRODUCT_PROPERTY_OVERRIDES`) |
 
 Both services are redefined with the init `override` keyword, which replaces the
@@ -261,10 +261,30 @@ AOSP definition from `system/core/rootdir/init.rc`. `init.target.rc` is imported
 from `init.qcom.rc`, which `init.rc` imports after its own service definitions,
 so the override lands in the right order.
 
-> **Not yet boot-verified.** Disabling SurfaceFlinger is the riskiest part of
-> this change: `system_server` may fail to acquire a display and crash-loop.
-> If that happens, drop the `surfaceflinger` override and keep only `bootanim`
-> disabled — the UI packages are already gone, which is what makes it headless.
+> **SurfaceFlinger stays enabled on purpose.** An earlier revision disabled it
+> to save RAM. That is not safe: `system_server` binds to the display path and
+> the camera HAL allocates graphic buffers through it, so a missing
+> SurfaceFlinger is a bootloop risk, not a saving. The headless part of this
+> build comes from the missing UI APKs, not from a missing display server.
+>
+> `bootanim` also stays enabled, but `debug.sf.nobootanimation=1` makes it exit
+> immediately, so nothing is drawn and init still gets its
+> `service.bootanim.exit` handshake.
+
+### Why the `PRODUCT_PACKAGES` filter-out is gone
+
+`qassa_santoni.mk` used to strip the UI with
+`PRODUCT_PACKAGES := $(filter-out SystemUI Launcher3 ...)`. That never worked.
+`inherit-product` is deferred in this tree (`build/make/core/product.mk:378`):
+it appends a `$(INHERIT_TAG)<path>` marker instead of including the makefile, so
+at that point the variable holds only markers and the filter matches nothing.
+`get_build_var PRODUCT_PACKAGES` still lists `SystemUI`, `Launcher3`,
+`Launcher3QuickStep` and `XiaomiAddon` for that reason.
+
+The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
+in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
+overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
+never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
 
 ### ADB Access
 

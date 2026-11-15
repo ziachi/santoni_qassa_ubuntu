@@ -233,14 +233,12 @@ service surfaceflinger /system/bin/surfaceflinger
     group graphics drmrpc readproc
     onrestart restart zygote
     writepid /dev/cpuset/system-background/tasks
-    disabled
     override
 
 service bootanim /system/bin/bootanimation
     class core animation
     user graphics
     group graphics audio
-    disabled
     oneshot
     writepid /dev/cpuset/system-background/tasks
     shutdown critical

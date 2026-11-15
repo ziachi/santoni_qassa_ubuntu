@@ -51,16 +51,19 @@ QASSA_BUILD_TYPE := UNOFFICIAL
 # Headless VPS mode
 # ========================================
 # The device is driven over ADB only, so the Android UI is dead weight.
-# This runs after the inherits above, so the packages are already in
-# PRODUCT_PACKAGES. prebuilts/Android.mk carries the same list in
-# LOCAL_OVERRIDES_PACKAGES to catch anything a later inherit adds back.
-PRODUCT_PACKAGES := $(filter-out \
-    SystemUI \
-    Launcher3 \
-    Launcher3QuickStep \
-    GCam \
-    XiaomiAddon, \
-    $(PRODUCT_PACKAGES))
+#
+# Do NOT strip the UI with `PRODUCT_PACKAGES := $(filter-out ...)` here.
+# inherit-product is deferred in this tree (build/make/core/product.mk:378):
+# it appends a $(INHERIT_TAG)<path> marker instead of including the makefile,
+# so at this point PRODUCT_PACKAGES holds only those markers and the filter
+# matches nothing. `get_build_var PRODUCT_PACKAGES` still lists SystemUI,
+# Launcher3, Launcher3QuickStep and XiaomiAddon because of it.
+#
+# The mechanism that actually works is LOCAL_OVERRIDES_PACKAGES on the
+# RemovePackages stub in prebuilts/Android.mk. main.mk:1110-1112 filters the
+# overridden names out of PRODUCTS.<mk>.PRODUCT_PACKAGES before install, so
+# the APKs never reach the image even though they stay in the requested list.
+# Keep both lists in sync when adding a package here.
 
 # Maintainer
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -80,6 +83,12 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.debuggable=1 \
     service.adb.tcp.port=5555 \
     persist.sys.adb.shell=/system/bin/ubuntu-enter
+
+# No boot animation is drawn, but the bootanim service stays enabled so init
+# still gets its service.bootanim.exit handshake. Disabling the service
+# outright risks a boot stall (see CHANGELOG v22).
+PRODUCT_PROPERTY_OVERRIDES += \
+    debug.sf.nobootanimation=1
 
 # Dual-auth login shell. adbd only honours persist.sys.adb.shell after the
 # patch in patches/README.md is applied to system/core/adb.

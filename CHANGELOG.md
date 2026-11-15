@@ -39,6 +39,7 @@
 | 33 | v21 | - | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
 | 34 | v21 | - | [v21] santoni: Point docs at the working repo (#34) |
 | 35 | v21 | - | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
+| 36 | v22 | - | [v22] santoni: restore surfaceflinger and verify minimal headless packages (#36) |
 
 ## Releases
 
@@ -481,6 +482,71 @@ The default password is now a real `0600 root:root` file from the first boot
 instead of an implicit fallback. No build output changes. The kernel stays
 Luuvy C.4.0 — the chroot VPS does not need the container namespaces, so
 `CONFIG_PID_NS` / `CONFIG_SYSVIPC` remain unset by design.
+
+### #36 — Restore surfaceflinger, keep bootanim, document the package override
+
+**Problem**
+`init.target.rc` overrode both `surfaceflinger` and `bootanim` with `disabled`.
+SurfaceFlinger is not optional on this platform: `system_server` binds to it
+through the display/gralloc path, and the camera HAL allocates graphic buffers
+through the same path. With the display server never started, the framework
+retries the connection and the camera stack has no buffer allocator, which is a
+bootloop risk rather than a RAM saving. The `bootanim` override had the same
+shape but a different consequence: with the service disabled, init never gets
+the `service.bootanim.exit` handshake.
+
+Separately, the headless package trim in `qassa_santoni.mk` looked correct but
+did nothing. `get_build_var PRODUCT_PACKAGES` still listed `SystemUI`,
+`Launcher3`, `Launcher3QuickStep` and `XiaomiAddon`.
+
+**Trial-Error**
+- `grep -rn "service surfaceflinger\|service bootanim" --include="*.rc" .` in
+  `device/xiaomi/santoni` found exactly one definition of each, both in
+  `rootdir/init.target.rc`, both carrying `disabled` plus `override`. The same
+  grep over `vendor/` returned nothing, so there is no second definition to
+  fight with.
+- `get_build_var PRODUCT_PACKAGES | tr ' ' '\n' | sort` returned 1027 entries
+  including `Launcher3` (99), `Launcher3QuickStep` (100), `SystemUI` (418) and
+  `XiaomiAddon` (439). `GCam` and `AudioFX` were already absent.
+- The cause is `build/make/core/product.mk:378`. `inherit-product` is deferred
+  in this tree: it appends a `$(INHERIT_TAG)<path>` marker to every product
+  variable instead of including the makefile. When `qassa_santoni.mk` reached
+  its `PRODUCT_PACKAGES := $(filter-out ...)`, the variable held only those
+  markers, so the filter matched nothing and the assignment was a no-op.
+- `grep -rn PRODUCT_PACKAGES_REMOVE build/make/` returned nothing. That
+  variable does not exist in this tree, so it is not an option.
+- `RemovePackages` *is* in `PRODUCT_PACKAGES` (entry 361), and
+  `prebuilts/Android.mk` gives it
+  `LOCAL_OVERRIDES_PACKAGES := AudioFX Launcher3 Launcher3QuickStep SystemUI GCam XiaomiAddon`.
+  `build/make/core/main.mk:1110-1112` expands that into `_pif_overrides` and
+  filters it out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install. That is
+  the mechanism that actually removes the APKs, which is why the image was
+  already correct while the requested list was not.
+
+**Fix**
+- `rootdir/init.target.rc`: dropped `disabled` from the `surfaceflinger` and
+  `bootanim` overrides. Both keep `override`, so they still replace the AOSP
+  definitions, and both now start normally.
+- `qassa_santoni.mk`: replaced the no-op `filter-out` with a comment that
+  records why it cannot work and points at `RemovePackages` as the real
+  mechanism, so the next person does not re-add it.
+- `qassa_santoni.mk`: added `debug.sf.nobootanimation=1`. The boot animation is
+  not drawn, but the service still runs and exits, so init gets its handshake
+  and there is no boot stall.
+
+**Files**
+`rootdir/init.target.rc`, `qassa_santoni.mk`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+SurfaceFlinger and the camera buffer path are back, removing the bootloop risk
+that the `disabled` override introduced. The boot animation still does not
+render, so the RAM cost is unchanged in practice. The UI APKs were already
+being stripped by `RemovePackages`; the tree now documents that instead of
+carrying dead code. No change to the HAL services: `vendor.sensors.qti`,
+`vendor-sensor-sh`, `vendor.audio-hal-2-0`, `qcamerasvr`, `cameraserver`,
+`audioserver`, `media` and `netd` were verified to have no `disabled` line.
+`wpa_supplicant` does carry `disabled`, which is the upstream AOSP design —
+`WifiService` starts it on demand.
 
 ## Key Changes by Version
 
