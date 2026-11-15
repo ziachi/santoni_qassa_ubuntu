@@ -299,7 +299,8 @@ through a dual-auth wrapper:
 | Ubuntu installed (`/data/ubuntu/bin/bash`) | `chroot /data/ubuntu /bin/bash -l` as root |
 | Ubuntu not installed | drops to `/system/bin/sh` with a hint to run `vps-setup` |
 
-Default password: **`santoniadmin`**. It is read from `/data/adb_wifi_pass`:
+Default password: **`santoniadmin`**. It is read from `/data/adb_wifi_pass`,
+which `vps-setup` and `init.ubuntu.sh` create on first boot as `0600 root:root`:
 
 ```bash
 # change it (over USB, no password needed)
@@ -323,7 +324,7 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
 
 ### Changing the ADB Wi-Fi password
 
-The password lives in `/data/adb_wifi_pass` (mode 600). Change it over USB,
+The password lives in `/data/adb_wifi_pass` (mode 600, owner `root:root`). Change it over USB,
 where no password is required:
 
 ```bash
@@ -338,7 +339,8 @@ echo 'my-new-password' | adb -s 192.168.1.50:5555 shell id   # works
 echo 'santoniadmin'    | adb -s 192.168.1.50:5555 shell id   # 3 tries, then closed
 ```
 
-Forgot it? Delete the file over USB and the default `santoniadmin` comes back:
+Forgot it? Delete the file over USB and the default `santoniadmin` comes back.
+`init.ubuntu.sh` recreates it with `0600 root:root` on the next boot:
 
 ```bash
 adb shell rm -f /data/adb_wifi_pass
@@ -352,7 +354,7 @@ Flash the ROM, plug in USB, then run one command:
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-It does five things:
+It does six things:
 
 1. `svc wifi enable`, wait for `wpa_supplicant`, then
    `cmd wifi connect-network <SSID> wpa2 <PASSWORD>`
@@ -362,6 +364,8 @@ It does five things:
    `sys`, `tmp`, `run`
 5. write `/etc/resolv.conf` (8.8.8.8, 1.1.1.1) and an `apt` `sources.list` for
    `ports.ubuntu.com`
+6. create `/data/adb_wifi_pass` with `santoniadmin` if it is missing, then
+   `chmod 600` and `chown 0:0`
 
 If the device has no `curl` and no `wget`, the script prints the `adb push`
 recipe instead of failing silently:
@@ -387,6 +391,7 @@ apt update && apt install -y openssh-server
 |---|---|
 | Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
+| Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
 | Bind mounts | `/dev`, `/dev/pts`, `/proc`, `/sys`, `/run` into `/data/ubuntu` |
 | SSH | `chroot /data/ubuntu /usr/sbin/service ssh start` |
 

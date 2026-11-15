@@ -38,6 +38,7 @@
 | 32 | v21 | 7beb938 | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
 | 33 | v21 | - | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
 | 34 | v21 | - | [v21] santoni: Point docs at the working repo (#34) |
+| 35 | v21 | - | [v21] santoni: Create /data/adb_wifi_pass on first boot (#35) |
 
 ## Releases
 
@@ -442,6 +443,44 @@ v21 headless work.
 **Impact**
 Documentation only — no build output changes. A fresh checkout now gets the v21
 headless tree instead of the pristine upstream one.
+
+### #35 — Create `/data/adb_wifi_pass` on first boot
+
+**Problem**
+`ubuntu-enter` reads the ADB-over-Wi-Fi password from `/data/adb_wifi_pass` and
+falls back to `santoniadmin` when the file is missing. Nothing ever created the
+file, so on a fresh device the fallback was the only thing in play: the password
+existed as a string inside a shell script, not as a `0600 root:root` file. Task 5
+(`vps-setup`) and Task 6 (`init.ubuntu.sh`) both specified creating it; neither
+did.
+
+**Trial-Error**
+- `grep -rn adb_wifi_pass` found the path only in `ubuntu-enter.sh` (a read with
+  a fallback) and in the docs. There was no writer anywhere in the tree.
+- The chroot section of `init.ubuntu.sh` exits early when `/data/ubuntu` is
+  missing, so the password step has to sit *before* that check — otherwise a
+  device that never ran `vps-setup` would never get the file.
+- `chown root:root` is not reliable on Android: there is no `/etc/passwd` to
+  resolve the names against. `chown 0:0` is the same ownership and always works.
+
+**Fix**
+- `vps-setup.sh` gained a sixth step: write `santoniadmin` to
+  `/data/adb_wifi_pass` when the file is absent or empty, then `chmod 600` and
+  `chown 0:0`. An existing file keeps its value.
+- `init.ubuntu.sh` gained section 3, which does the same on every boot before
+  the chroot check, so the file exists even on a device that never ran
+  `vps-setup`. The chroot section is now section 4.
+- Both scripts re-apply `0600 root:root` to an existing file, so a file left
+  world-readable by an older flow is tightened on the next boot.
+
+**Files**
+`vps-setup/vps-setup.sh`, `rootdir/init.ubuntu.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+The default password is now a real `0600 root:root` file from the first boot
+instead of an implicit fallback. No build output changes. The kernel stays
+Luuvy C.4.0 — the chroot VPS does not need the container namespaces, so
+`CONFIG_PID_NS` / `CONFIG_SYSVIPC` remain unset by design.
 
 ## Key Changes by Version
 

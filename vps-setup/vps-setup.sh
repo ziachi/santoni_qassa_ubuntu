@@ -5,8 +5,9 @@
 #   adb shell vps-setup <SSID> <WIFI_PASSWORD>
 #
 # Joins the Wi-Fi network, downloads the Ubuntu 22.04 arm64 base rootfs,
-# unpacks it into /data/ubuntu and prepares it for chroot. Run it over USB:
-# the Wi-Fi password gate in ubuntu-enter does not apply to a USB session.
+# unpacks it into /data/ubuntu, prepares it for chroot and seeds the
+# ADB-over-Wi-Fi password file. Run it over USB: the Wi-Fi password gate in
+# ubuntu-enter does not apply to a USB session.
 
 set -u
 
@@ -27,7 +28,7 @@ die() {
 [ -n "$WIFI_PASS" ] || die "usage: vps-setup <SSID> <WIFI_PASSWORD>"
 
 # ---------------------------------------------------------------- 1. Wi-Fi
-echo "[1/5] Joining Wi-Fi: $SSID"
+echo "[1/6] Joining Wi-Fi: $SSID"
 svc wifi enable
 
 i=0
@@ -39,7 +40,7 @@ done
 
 cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" || die "cmd wifi connect-network failed"
 
-echo "[2/5] Waiting for an IP address"
+echo "[2/6] Waiting for an IP address"
 ip_addr=""
 i=0
 while [ "$i" -lt 30 ]; do
@@ -54,7 +55,7 @@ done
 echo "      wlan0 = $ip_addr"
 
 # ------------------------------------------------------------- 2. Download
-echo "[3/5] Downloading the Ubuntu 22.04 arm64 base rootfs"
+echo "[3/6] Downloading the Ubuntu 22.04 arm64 base rootfs"
 
 download() {
     url=$1
@@ -87,7 +88,7 @@ fi
 [ -s "$TARBALL" ] || die "download produced an empty file"
 
 # -------------------------------------------------------------- 3. Extract
-echo "[4/5] Extracting into $UBUNTU_ROOT"
+echo "[4/6] Extracting into $UBUNTU_ROOT"
 mkdir -p "$UBUNTU_ROOT" || die "cannot create $UBUNTU_ROOT"
 tar -xzf "$TARBALL" -C "$UBUNTU_ROOT" || die "tar failed"
 [ -x "$UBUNTU_ROOT/bin/bash" ] || die "extracted rootfs has no /bin/bash"
@@ -97,7 +98,7 @@ for d in dev dev/pts proc sys tmp run; do
 done
 
 # ------------------------------------------------------------- 4. Network
-echo "[5/5] Writing resolv.conf and apt sources"
+echo "[5/6] Writing resolv.conf and apt sources"
 
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
 nameserver 8.8.8.8
@@ -111,6 +112,18 @@ deb http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe 
 deb http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
 EOF
 fi
+
+# ------------------------------------------------------- 5. ADB password
+echo "[6/6] Seeding the ADB Wi-Fi password"
+PASS_FILE=/data/adb_wifi_pass
+if [ ! -s "$PASS_FILE" ]; then
+    echo "santoniadmin" > "$PASS_FILE" || die "cannot write $PASS_FILE"
+    echo "      wrote the default password to $PASS_FILE"
+else
+    echo "      $PASS_FILE already exists, keeping its value"
+fi
+chmod 600 "$PASS_FILE" 2>/dev/null
+chown 0:0 "$PASS_FILE" 2>/dev/null
 
 echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"

@@ -50,7 +50,25 @@ else
     log "no $ZRAM_DEV, skipping swap"
 fi
 
-# --- 3. Ubuntu chroot ----------------------------------------------------
+# --- 3. ADB Wi-Fi password -----------------------------------------------
+# ubuntu-enter falls back to "santoniadmin" when the file is missing, but
+# creating it here makes the default explicit and puts the 0600 root:root mode
+# in place from the first boot instead of leaving the password readable. This
+# runs before the chroot check so a device without Ubuntu still gets the file.
+PASS_FILE=/data/adb_wifi_pass
+if [ ! -s "$PASS_FILE" ]; then
+    if echo "santoniadmin" > "$PASS_FILE" 2>/dev/null; then
+        log "created $PASS_FILE with the default password"
+    else
+        log "could not create $PASS_FILE"
+    fi
+fi
+if [ -e "$PASS_FILE" ]; then
+    chmod 600 "$PASS_FILE" 2>/dev/null
+    chown 0:0 "$PASS_FILE" 2>/dev/null
+fi
+
+# --- 4. Ubuntu chroot ----------------------------------------------------
 if [ ! -x "$UBUNTU_ROOT/bin/bash" ]; then
     log "no Ubuntu at $UBUNTU_ROOT — run vps-setup over USB"
     exit 0
