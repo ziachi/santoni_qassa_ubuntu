@@ -220,6 +220,34 @@ grep -i "error\|fail" /tmp/build.log  # check errors
 The ROM is built as a headless server: no Android UI, no display server, no
 boot animation. Everything is driven over ADB.
 
+### Quick start
+
+From a freshly flashed device to an SSH session, in order:
+
+```bash
+# 1. USB — no RSA prompt, adbd is already root
+adb devices
+adb shell id                      # uid=0(root)
+
+# 2. USB — join Wi-Fi and install Ubuntu 22.04 in one command
+adb shell vps-setup "MyWiFi" "MyWiFiPassword"
+
+# 3. note the IP the script prints, then move to Wi-Fi ADB
+adb connect 192.168.1.50:5555
+echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
+
+# 4. inside Ubuntu — install sshd and give root a password
+apt update && apt install -y openssh-server
+passwd root                       # sshd refuses an empty root password
+
+# 5. from any machine on the LAN
+ssh root@192.168.1.50
+```
+
+Steps 1–2 need the cable. After step 2 the device is self-sufficient: it
+rejoins Wi-Fi and starts Ubuntu on every boot, so steps 3–5 work over the
+network from then on.
+
 | Change | Where |
 |---|---|
 | `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
@@ -293,6 +321,29 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
 > password gate is the only thing in front of it — firewall 5555 to trusted
 > networks if the device is ever exposed.
 
+### Changing the ADB Wi-Fi password
+
+The password lives in `/data/adb_wifi_pass` (mode 600). Change it over USB,
+where no password is required:
+
+```bash
+adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
+```
+
+The file is read on every Wi-Fi session, so no reboot is needed. Check that the
+new value is accepted and the old one is not:
+
+```bash
+echo 'my-new-password' | adb -s 192.168.1.50:5555 shell id   # works
+echo 'santoniadmin'    | adb -s 192.168.1.50:5555 shell id   # 3 tries, then closed
+```
+
+Forgot it? Delete the file over USB and the default `santoniadmin` comes back:
+
+```bash
+adb shell rm -f /data/adb_wifi_pass
+```
+
 ### First setup (USB)
 
 Flash the ROM, plug in USB, then run one command:
@@ -346,6 +397,19 @@ fstab. Everything logs under the `vps-boot:` tag:
 ```bash
 adb logcat -s vps-boot
 ```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `vps-setup: no IP on wlan0 after 30s` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `vps-setup: no downloader on the device` | no `curl` and no `wget` | use the `adb push` recipe the script prints |
+| `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
+| Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
+| `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
+| `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
+| `vps-boot: could not bind-mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
+| `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
 
 ## Kernel Capability Check
 

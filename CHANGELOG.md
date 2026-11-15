@@ -35,7 +35,8 @@
 | 29 | v21 | 0acc93c | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
 | 30 | v21 | 9d13e81 | [v21] santoni: Dual-auth login shell ubuntu-enter (#30) |
 | 31 | v21 | 552ab0c | [v21] santoni: vps-setup first-run installer (#31) |
-| 32 | v21 | - | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
+| 32 | v21 | 7beb938 | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
+| 33 | v21 | - | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
 
 ## Releases
 
@@ -369,6 +370,49 @@ device running a full userspace.
 - The device never suspends, so it stays reachable.
 - Swap grows from 1 GB to 2 GB, which matters on a 3 GB device.
 - Everything is logged under the `vps-boot:` tag in logcat.
+
+### #33 — Operational guide: quick start, password, troubleshooting
+
+**Problem**
+The pieces were documented one at a time, in the order they were built. Someone
+holding a freshly flashed device had to read five sections and work out the
+order themselves, and the two things that actually go wrong on first boot —
+a wrong Wi-Fi password and a missing `openssh-server` — were not written down
+anywhere.
+
+**Trial-Error**
+- The password section only showed how to *set* the file. It did not say that
+  `ubuntu-enter` re-reads `/data/adb_wifi_pass` on every session, so a reboot
+  is not needed, and it did not say how to recover a forgotten password.
+  Deleting the file restores the `santoniadmin` default, which is the only
+  recovery path that does not need the password.
+- `ssh root@<ip>` fails on a stock `ubuntu-base` rootfs because root has no
+  password and `sshd` refuses an empty one. `passwd root` has to be part of the
+  documented flow, not an afterthought.
+- The `adb connect` example used a hardcoded IP with no way to find it. The
+  address is printed by `vps-setup`, and `ip -4 addr show wlan0` is the
+  fallback.
+- santoni has no 5 GHz radio, so a 5 GHz-only SSID fails at the connect step
+  with a generic "no IP" message. That is now the first troubleshooting row.
+
+**Fix**
+`README.md` gained three sections under Headless VPS Mode:
+
+- **Quick start** — the five commands from `adb devices` to `ssh root@<ip>`,
+  with a note on which steps need the cable.
+- **Changing the ADB Wi-Fi password** — set, verify (new value accepted, old
+  value rejected), and recover a forgotten one by deleting the file.
+- **Troubleshooting** — a symptom/cause/fix table covering the Wi-Fi join, the
+  missing downloader, `adb connect` refused, an unknown Wi-Fi password, a
+  missing Ubuntu, a missing `openssh-server`, a failed bind mount, and the
+  `system_server` crash-loop from the SurfaceFlinger override.
+
+**Files**
+`README.md`, `CHANGELOG.md`
+
+**Impact**
+Documentation only — no build output changes. Tahap 2 is complete; the next
+step is `gas build`.
 
 ## Key Changes by Version
 
