@@ -47,6 +47,21 @@ BUILD_FINGERPRINT := "Xiaomi/santoni/santoni:7.1.2/N2G47H/V9.5.10.0.NAMMIFD:user
 # Build type: Unofficial
 QASSA_BUILD_TYPE := UNOFFICIAL
 
+# ========================================
+# Headless VPS mode
+# ========================================
+# The device is driven over ADB only, so the Android UI is dead weight.
+# This runs after the inherits above, so the packages are already in
+# PRODUCT_PACKAGES. prebuilts/Android.mk carries the same list in
+# LOCAL_OVERRIDES_PACKAGES to catch anything a later inherit adds back.
+PRODUCT_PACKAGES := $(filter-out \
+    SystemUI \
+    Launcher3 \
+    Launcher3QuickStep \
+    GCam \
+    XiaomiAddon, \
+    $(PRODUCT_PACKAGES))
+
 # Maintainer
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.qassa.maintainer=ziachi \

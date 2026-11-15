@@ -222,3 +222,26 @@ service ppd /vendor/bin/mm-pp-dpps
     group system graphics
     socket pps stream 0660 system system
     disabled
+
+# Headless VPS: no display server and no boot animation.
+# `override` replaces the AOSP definition from system/core/rootdir/init.rc;
+# this file is imported from init.qcom.rc, which init.rc imports after its own
+# service definitions, so the override is applied in the right order.
+service surfaceflinger /system/bin/surfaceflinger
+    class core animation
+    user system
+    group graphics drmrpc readproc
+    onrestart restart zygote
+    writepid /dev/cpuset/system-background/tasks
+    disabled
+    override
+
+service bootanim /system/bin/bootanimation
+    class core animation
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
+    writepid /dev/cpuset/system-background/tasks
+    shutdown critical
+    override

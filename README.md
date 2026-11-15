@@ -18,7 +18,7 @@
 | **Build command** | `mka qassa -j$(nproc)` |
 | **Build type** | UNOFFICIAL |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
-| **SELinux** | Enforcing (always) |
+| **SELinux** | Permissive (headless VPS build, see Hard Rule #2) |
 | **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.228 arm64 |
 | **Manifest** | `https://github.com/keepQASSA/manifest.git` branch `Q` |
 | **Maintainer** | [@kalomakan](https://t.me/kalomakan) / [ziachi](https://github.com/ziachi) |
@@ -210,10 +210,32 @@ grep -i "error\|fail" /tmp/build.log  # check errors
 ### Device Features
 - ADB enabled by default (headless/automation access)
 - Custom signed with releasekey
-- SELinux enforcing (always)
+- SELinux permissive (headless VPS build)
 - Maintainer info embedded in build.prop
 
 ---
+
+## Headless VPS Mode
+
+The ROM is built as a headless server: no Android UI, no display server, no
+boot animation. Everything is driven over ADB.
+
+| Change | Where |
+|---|---|
+| `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
+| `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `qassa_santoni.mk` (`PRODUCT_PACKAGES` filter-out) + `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES`) |
+| `service surfaceflinger` → `disabled` | `rootdir/init.target.rc` |
+| `service bootanim` → `disabled` | `rootdir/init.target.rc` |
+
+Both services are redefined with the init `override` keyword, which replaces the
+AOSP definition from `system/core/rootdir/init.rc`. `init.target.rc` is imported
+from `init.qcom.rc`, which `init.rc` imports after its own service definitions,
+so the override lands in the right order.
+
+> **Not yet boot-verified.** Disabling SurfaceFlinger is the riskiest part of
+> this change: `system_server` may fail to acquire a display and crash-loop.
+> If that happens, drop the `surfaceflinger` override and keep only `bootanim`
+> disabled — the UI packages are already gone, which is what makes it headless.
 
 ## Kernel Capability Check
 
@@ -270,7 +292,7 @@ Plain `chroot` is fully supported.
 | # | Rule |
 |---|------|
 | 1 | **NEVER `git push --force`** — History is sacred, no exceptions |
-| 2 | **SELinux MUST stay Enforcing** — No permissive, ever |
+| 2 | **SELinux is Permissive for the headless VPS build** — `androidboot.selinux=permissive` in `BoardConfig.mk`. This supersedes the old "always Enforcing" rule; the Ubuntu chroot needs it. Revert to Enforcing only for a phone build. |
 | 3 | **1 fix = 1 commit** — Format: `[vN] santoni: description (#N)` |
 | 4 | **Commit body must include:** Problem / Fix / Files / Impact |
 | 5 | **Don't mix Matrixx patterns with Qassa** — Different ROM, different codebase |

@@ -30,7 +30,8 @@
 | 24 | v20 | d14747c | Update README + CHANGELOG for release (#24) |
 | 25 | v20 | 28593f0 | Remove incorrect credit from README (#25) |
 | 26 | v21 | 8f96ca1 | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
-| 27 | v21 | - | [v21] santoni: Verify kernel config for chroot VPS (#27) |
+| 27 | v21 | e5f8c85 | [v21] santoni: Verify kernel config for chroot VPS (#27) |
+| 28 | v21 | - | [v21] santoni: Headless mode + SELinux permissive (#28) |
 
 ## Releases
 
@@ -136,6 +137,49 @@ Missing, optional (container-only): `CONFIG_PID_NS`, `CONFIG_UTS_NS`,
   `CONFIG_SYSVIPC`. Use SQLite, or rebuild the kernel with the three missing
   required options if those services are needed.
 - The chroot must bind-mount Android's `/dev` because `CONFIG_DEVTMPFS` is off.
+
+### #28 — Headless mode + SELinux permissive
+
+**Problem**
+The ROM boots a full Android UI that nobody can reach: the device is a VPS
+driven over ADB. The UI costs RAM, boot time and a display server, and SELinux
+enforcing blocks the Ubuntu chroot from doing its job.
+
+**Trial-Error**
+- `BOARD_KERNEL_CMDLINE` had a latent bug: the `ifeq ($(TARGET_KERNEL_VERSION), 4.9)`
+  block used `:=` (overwrite) instead of `+=`, and `TARGET_KERNEL_VERSION` was
+  only defined ~10 lines *below* it. The block therefore never fired, and if it
+  ever had, it would have wiped the entire cmdline down to
+  `androidboot.usbconfigfs=true`. Fixed by moving `TARGET_KERNEL_VERSION := 4.9`
+  above the block and switching to `+=`.
+- `device.mk` listed `GCam` in `PRODUCT_PACKAGES` while `GCam/Android.mk` is a
+  prebuilt that needs `GCam/Camera.apk`. Removing the package entry also removes
+  a build-time dependency on that APK.
+- A plain `PRODUCT_PACKAGES -= SystemUI` does not work in product config, and
+  `filter-out` alone misses packages added by later inherits. Used both:
+  `filter-out` in `qassa_santoni.mk` (after the inherits) plus the existing
+  `RemovePackages` module's `LOCAL_OVERRIDES_PACKAGES` as the safety net.
+- `service surfaceflinger` cannot simply be re-declared — init rejects duplicate
+  service names. Used the init `override` keyword, which is supported from
+  Android 9 and replaces the AOSP definition.
+
+**Fix**
+- `BOARD_KERNEL_CMDLINE += androidboot.selinux=permissive`.
+- Dropped `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon`
+  from the product.
+- `surfaceflinger` and `bootanim` redefined as `disabled` in `init.target.rc`.
+- README Hard Rule #2 rewritten: permissive is now the policy for this build.
+
+**Files**
+`BoardConfig.mk`, `device.mk`, `qassa_santoni.mk`, `prebuilts/Android.mk`,
+`rootdir/init.target.rc`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+- SELinux runs permissive; the chroot is no longer blocked by denials.
+- No launcher, no status bar, no boot animation, no camera app, no XiaomiAddon.
+- **Needs boot verification.** Disabling SurfaceFlinger is the risky part:
+  `system_server` may fail to acquire a display and crash-loop. If it does,
+  remove the `surfaceflinger` override and keep only `bootanim` disabled.
 
 ## Key Changes by Version
 
