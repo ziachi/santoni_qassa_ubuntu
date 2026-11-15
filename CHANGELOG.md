@@ -29,7 +29,8 @@
 | 23 | v20 | 2e0ceda | Add Spectrum kernel profile to XiaomiAddon (#23) |
 | 24 | v20 | d14747c | Update README + CHANGELOG for release (#24) |
 | 25 | v20 | 28593f0 | Remove incorrect credit from README (#25) |
-| 26 | v21 | - | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
+| 26 | v21 | 8f96ca1 | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
+| 27 | v21 | - | [v21] santoni: Verify kernel config for chroot VPS (#27) |
 
 ## Releases
 
@@ -74,6 +75,67 @@ ready-made AnyKernel3 zip.
 **Impact**
 `kernel/xiaomi/msm8937` is no longer required to build the ROM. The boot image
 is byte-identical to the published Luuvy kernel.
+
+### #27 — Verify kernel config for the chroot VPS
+
+**Problem**
+The Ubuntu VPS runs as a `chroot` inside Android, so the kernel must expose
+the namespace, IPC, cgroup and filesystem features that userspace expects.
+Nothing verified that the prebuilt Luuvy kernel actually has them.
+
+**Trial-Error**
+- `extract-ikconfig` from the kernel tree needs a source checkout, which we
+  deliberately no longer have. Replaced with a self-contained `python3`
+  extractor that scans the decompressed `Image` for the `IKCFG_ST` marker and
+  gunzips the blob that follows it. Works on `Image.gz-dtb` directly.
+- The `IKCFG_ED` end marker is not present in this image, so the extractor
+  falls back to "everything after the gzip stream" and trims to the last
+  `CONFIG_` line. Result: 4969 lines, `Linux/arm64 4.9.228`.
+- First run of the checker reported 3 required options missing. Verified by
+  hand against `kernel.config` — the report is correct, not a parser bug.
+
+**Result — 46/49 required options present**
+
+Present and important: `CONFIG_NAMESPACES`, `CONFIG_NET_NS`, `CONFIG_CGROUPS`,
+`CONFIG_CGROUP_FREEZER`, `CONFIG_CPUSETS`, `CONFIG_OVERLAY_FS`, `CONFIG_FUSE_FS`,
+`CONFIG_TUN`, `CONFIG_BRIDGE`, `CONFIG_NETFILTER`, `CONFIG_NF_CONNTRACK`,
+`CONFIG_IP_NF_NAT`, `CONFIG_IP_NF_TARGET_MASQUERADE`, `CONFIG_EXT4_FS`,
+`CONFIG_TMPFS`, `CONFIG_ZRAM`, `CONFIG_SWAP`, `CONFIG_SECCOMP`, `CONFIG_KEYS`,
+`CONFIG_IKCONFIG_PROC` (so `/proc/config.gz` works on device),
+`CONFIG_MODULES`, `CONFIG_DM_CRYPT`, `CONFIG_BLK_DEV_LOOP`,
+`CONFIG_ANDROID_BINDER_IPC`, `CONFIG_ASHMEM`, `CONFIG_ION`, `CONFIG_SDCARD_FS`,
+`CONFIG_SECURITY_SELINUX`, `CONFIG_USB_CONFIGFS`, `CONFIG_ARM64_4K_PAGES`.
+
+Missing, required:
+
+| Option | Consequence |
+|---|---|
+| `CONFIG_SYSVIPC` | No SysV IPC. PostgreSQL, Redis and several daemons refuse to start. |
+| `CONFIG_POSIX_MQUEUE` | No POSIX message queues. |
+| `CONFIG_DEVTMPFS` | `/dev` cannot be auto-populated; the chroot must bind-mount Android's `/dev`. |
+
+Missing, optional (container-only): `CONFIG_PID_NS`, `CONFIG_UTS_NS`,
+`CONFIG_IPC_NS`, `CONFIG_USER_NS`, `CONFIG_MEMCG`, `CONFIG_VETH`,
+`CONFIG_SQUASHFS`, `CONFIG_BINFMT_MISC`, `CONFIG_DEVPTS_MULTIPLE_INSTANCES`.
+
+**Fix**
+- `tools/verify-ikconfig.sh` (landed with #26) reads the config straight out of
+  a kernel image or a `.config`, checks 49 required and 9 optional options,
+  prints a table and exits non-zero when a required option is missing.
+- Recorded the full result here and in `README.md`.
+
+**Files**
+`tools/verify-ikconfig.sh`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+- Plain `chroot` into Ubuntu 22.04 works: namespaces for networking, cgroups,
+  overlayfs, tmpfs, ZRAM swap and SELinux are all available.
+- **Container runtimes (Docker/LXC/podman) will not work** on this kernel —
+  no PID/UTS/IPC/user namespaces and no veth.
+- **SysV-IPC services will not work** — PostgreSQL and Redis need
+  `CONFIG_SYSVIPC`. Use SQLite, or rebuild the kernel with the three missing
+  required options if those services are needed.
+- The chroot must bind-mount Android's `/dev` because `CONFIG_DEVTMPFS` is off.
 
 ## Key Changes by Version
 

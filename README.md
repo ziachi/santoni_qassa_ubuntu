@@ -215,6 +215,30 @@ grep -i "error\|fail" /tmp/build.log  # check errors
 
 ---
 
+## Kernel Capability Check
+
+The prebuilt kernel is verified against the options the Ubuntu chroot needs:
+
+```bash
+tools/verify-ikconfig.sh prebuilts/kernel/Image.gz-dtb
+```
+
+It reads the config straight out of the image (no kernel source needed), prints
+a per-option table and exits non-zero if a required option is missing.
+
+Current result for Luuvy C.4.0.eol202601: **46/49 required present**.
+
+| Missing (required) | Consequence |
+|---|---|
+| `CONFIG_SYSVIPC` | PostgreSQL / Redis and other SysV-IPC daemons will not start |
+| `CONFIG_POSIX_MQUEUE` | No POSIX message queues |
+| `CONFIG_DEVTMPFS` | `/dev` must be bind-mounted from Android into the chroot |
+
+Also absent, container-only: `CONFIG_PID_NS`, `CONFIG_UTS_NS`, `CONFIG_IPC_NS`,
+`CONFIG_USER_NS`, `CONFIG_MEMCG`, `CONFIG_VETH`, `CONFIG_SQUASHFS`,
+`CONFIG_BINFMT_MISC`. **Docker / LXC / podman cannot run on this kernel.**
+Plain `chroot` is fully supported.
+
 ## Known Issues & Fixes
 
 | # | Issue | Status | Fix |
