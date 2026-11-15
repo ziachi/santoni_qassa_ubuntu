@@ -193,25 +193,4 @@ $(EGL_64_SYMLINKS): $(LOCAL_INSTALLED_MODULE)
 
 ALL_DEFAULT_INSTALLED_MODULES += $(EGL_32_SYMLINKS) $(EGL_64_SYMLINKS)
 
-# Headless VPS: Ubuntu chroot bring-up script and its init service.
-# Installed as prebuilts so the script keeps mode 0755 and the rc lands in
-# /system/etc/init, which init parses at boot.
-include $(CLEAR_VARS)
-LOCAL_MODULE := init.ubuntu.sh
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_CLASS := EXECUTABLES
-LOCAL_MODULE_PATH := $(TARGET_OUT)/bin
-LOCAL_SRC_FILES := rootdir/init.ubuntu.sh
-LOCAL_MODULE_STEM := init.ubuntu.sh
-include $(BUILD_PREBUILT)
-
-include $(CLEAR_VARS)
-LOCAL_MODULE := init.ubuntu.rc
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_CLASS := ETC
-LOCAL_MODULE_PATH := $(TARGET_OUT)/etc/init
-LOCAL_SRC_FILES := rootdir/init.ubuntu.rc
-LOCAL_MODULE_STEM := init.ubuntu.rc
-include $(BUILD_PREBUILT)
-
 endif
