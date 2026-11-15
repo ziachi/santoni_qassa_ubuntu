@@ -31,7 +31,8 @@
 | 25 | v20 | 28593f0 | Remove incorrect credit from README (#25) |
 | 26 | v21 | 8f96ca1 | [v21] santoni: Use prebuilt Luuvy kernel (#26) |
 | 27 | v21 | e5f8c85 | [v21] santoni: Verify kernel config for chroot VPS (#27) |
-| 28 | v21 | - | [v21] santoni: Headless mode + SELinux permissive (#28) |
+| 28 | v21 | 4d8f288 | [v21] santoni: Headless mode + SELinux permissive (#28) |
+| 29 | v21 | - | [v21] santoni: ADB over USB without signature + Wi-Fi 5555 (#29) |
 
 ## Releases
 
@@ -180,6 +181,49 @@ enforcing blocks the Ubuntu chroot from doing its job.
 - **Needs boot verification.** Disabling SurfaceFlinger is the risky part:
   `system_server` may fail to acquire a display and crash-loop. If it does,
   remove the `surfaceflinger` override and keep only `bootanim` disabled.
+
+### #29 — ADB over USB without signature + ADB over Wi-Fi on 5555
+
+**Problem**
+With the UI gone there is no screen to tap "Allow USB debugging" on, so the
+RSA authorisation prompt makes the device unreachable. ADB also has to be
+reachable over Wi-Fi, because the whole point is a headless box on a shelf.
+
+**Trial-Error**
+- `persist.sys.usb.config=mtp,adb` keeps MTP in the gadget composition. MTP
+  needs a UI to be useful and it delays adbd coming up. Switched to `adb` only.
+- `ro.secure`, `ro.debuggable` and `ro.adb.secure` are already set by the
+  build variant (`userdebug` gives `0 / 1 / 0`). They are pinned in
+  `PRODUCT_PROPERTY_OVERRIDES` anyway so a `user` variant build behaves the
+  same. This is safe: the values land in `/system/build.prop`, which is read
+  after `default.prop`, and there is no duplicate key inside the override list
+  itself (a duplicate there is a hard build error).
+- `service.adb.tcp.port` is read by adbd at start, so it must be a build prop
+  and not something set later by a script.
+
+**Fix**
+
+```makefile
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.sys.usb.config=adb \
+    persist.service.adb.enable=1 \
+    ro.adb.secure=0 \
+    ro.secure=0 \
+    ro.debuggable=1 \
+    service.adb.tcp.port=5555
+```
+
+**Files**
+`qassa_santoni.mk`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+- Plugging in USB gives an authorised `adb shell` immediately, no on-screen
+  confirmation.
+- adbd also listens on TCP 5555 from boot, so `adb connect <ip>:5555` works
+  once Wi-Fi is up.
+- No MTP: the device no longer shows up as a file-transfer device.
+- **Security:** anyone on the same network who can reach port 5555 gets a root
+  shell. The password gate in #30 is what protects it.
 
 ## Key Changes by Version
 

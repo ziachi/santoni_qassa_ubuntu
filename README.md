@@ -226,6 +226,7 @@ boot animation. Everything is driven over ADB.
 | `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `qassa_santoni.mk` (`PRODUCT_PACKAGES` filter-out) + `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES`) |
 | `service surfaceflinger` → `disabled` | `rootdir/init.target.rc` |
 | `service bootanim` → `disabled` | `rootdir/init.target.rc` |
+| ADB over USB without the RSA prompt, ADB over Wi-Fi on 5555 | `qassa_santoni.mk` (`PRODUCT_PROPERTY_OVERRIDES`) |
 
 Both services are redefined with the init `override` keyword, which replaces the
 AOSP definition from `system/core/rootdir/init.rc`. `init.target.rc` is imported
@@ -236,6 +237,30 @@ so the override lands in the right order.
 > this change: `system_server` may fail to acquire a display and crash-loop.
 > If that happens, drop the `surfaceflinger` override and keep only `bootanim`
 > disabled — the UI packages are already gone, which is what makes it headless.
+
+### ADB Access
+
+| Property | Value | Effect |
+|---|---|---|
+| `persist.sys.usb.config` | `adb` | USB gadget exposes adb only (no MTP) |
+| `persist.service.adb.enable` | `1` | adbd starts at boot |
+| `ro.adb.secure` | `0` | no RSA authorisation prompt |
+| `ro.secure` | `0` | adbd runs as root |
+| `ro.debuggable` | `1` | debuggable build |
+| `service.adb.tcp.port` | `5555` | adbd also listens on TCP 5555 |
+
+```bash
+# Over USB — no on-screen confirmation needed
+adb devices
+adb shell
+
+# Over Wi-Fi, once the device is on the network
+adb connect 192.168.1.50:5555
+adb -s 192.168.1.50:5555 shell
+```
+
+> **Security:** port 5555 gives a root shell to anyone who can reach it. The
+> `ubuntu-enter` password gate (#30) is what stands in front of it.
 
 ## Kernel Capability Check
 

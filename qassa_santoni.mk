@@ -68,10 +68,17 @@ PRODUCT_PROPERTY_OVERRIDES += \
     ro.qassa.maintainer.github=https://github.com/ziachi \
     ro.qassa.maintainer.telegram=https://t.me/kalomakan
 
-# ADB enabled by default
+# ADB: USB without the RSA signature prompt, plus ADB over Wi-Fi on 5555.
+# ro.secure / ro.debuggable / ro.adb.secure are already implied by the
+# userdebug variant, but they are pinned here so a "user" variant build
+# behaves the same way.
 PRODUCT_PROPERTY_OVERRIDES += \
-    persist.sys.usb.config=mtp,adb \
-    persist.service.adb.enable=1
+    persist.sys.usb.config=adb \
+    persist.service.adb.enable=1 \
+    ro.adb.secure=0 \
+    ro.secure=0 \
+    ro.debuggable=1 \
+    service.adb.tcp.port=5555
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey
