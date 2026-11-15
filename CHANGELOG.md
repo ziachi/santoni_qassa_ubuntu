@@ -1,4 +1,4 @@
-# CHANGELOG — device_xiaomi_santoni_qassa
+# CHANGELOG — santoni_qassa_ubuntu
 
 ## Commits
 
@@ -37,6 +37,7 @@
 | 31 | v21 | 552ab0c | [v21] santoni: vps-setup first-run installer (#31) |
 | 32 | v21 | 7beb938 | [v21] santoni: Auto-start Ubuntu, wake lock, ZRAM 2 GB (#32) |
 | 33 | v21 | - | [v21] santoni: Operational guide — quick start, password, troubleshooting (#33) |
+| 34 | v21 | - | [v21] santoni: Point docs at the working repo (#34) |
 
 ## Releases
 
@@ -413,6 +414,34 @@ anywhere.
 **Impact**
 Documentation only — no build output changes. Tahap 2 is complete; the next
 step is `gas build`.
+
+### #34 — Point docs at the working repo
+
+**Problem**
+The device tree moved from `ziachi/device_xiaomi_santoni_qassa` — the upstream
+reference, kept pristine at `6be065b` — to `ziachi/santoni_qassa_ubuntu`. The
+README still told a fresh VPS to clone the reference repo on branch `qassa-dev`,
+so a new build would have pulled the unmodified upstream tree with none of the
+v21 headless work.
+
+**Trial-Error**
+- `grep -rn device_xiaomi_santoni_qassa` found three stale references: the
+  Repository Map table, the Step 2 clone command, and the CHANGELOG title.
+- The reference repo is public and read-only by policy. Committing there was a
+  mistake made earlier in the session; it has been reverted and the eight v21
+  commits were moved here with their signatures intact.
+
+**Fix**
+- Repository Map: device tree now points at `santoni_qassa_ubuntu`, branch `main`.
+- Step 2: `git clone .../santoni_qassa_ubuntu.git device/xiaomi/santoni -b main`.
+- CHANGELOG title renamed to match the working repo.
+
+**Files**
+`README.md`, `CHANGELOG.md`
+
+**Impact**
+Documentation only — no build output changes. A fresh checkout now gets the v21
+headless tree instead of the pristine upstream one.
 
 ## Key Changes by Version
 

@@ -45,7 +45,7 @@ All custom repos for this ROM. Clone each into the matching path inside the Qass
 
 | Repo | GitHub URL | Branch | Clone Path |
 |------|-----------|--------|------------|
-| **Device tree** | [device_xiaomi_santoni_qassa](https://github.com/ziachi/device_xiaomi_santoni_qassa) | `qassa-dev` | `device/xiaomi/santoni` |
+| **Device tree** | [santoni_qassa_ubuntu](https://github.com/ziachi/santoni_qassa_ubuntu) | `main` | `device/xiaomi/santoni` |
 | **Vendor blobs** | [vendor_xiaomi_santoni_qassa](https://github.com/ziachi/vendor_xiaomi_santoni_qassa) | `10.0` | `vendor/xiaomi/santoni` |
 | **Kernel** | [kernel_xiaomi_msm8937_qassa](https://github.com/ziachi/kernel_xiaomi_msm8937_qassa) | `13` | `kernel/xiaomi/msm8937` |
 | **Framework** | [frameworks_base_qassa](https://github.com/ziachi/frameworks_base_qassa) | `qassa-10` | `frameworks/base` |
@@ -104,8 +104,8 @@ cd ~/qassa
 
 # Device tree
 rm -rf device/xiaomi/santoni
-git clone https://github.com/ziachi/device_xiaomi_santoni_qassa.git \
-    device/xiaomi/santoni -b qassa-dev
+git clone https://github.com/ziachi/santoni_qassa_ubuntu.git \
+    device/xiaomi/santoni -b main
 
 # Vendor blobs
 rm -rf vendor/xiaomi/santoni
