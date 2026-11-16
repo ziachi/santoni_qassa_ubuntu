@@ -302,6 +302,52 @@ else
     log "could not mount /sys"
 fi
 
+# --- 6a. Network tuning for game servers and local services --------------
+# Kernel-wide limits, applied once at boot. Android's defaults are tuned for a
+# phone, not for a host that answers LAN discovery broadcasts and runs several
+# listeners, so each of these is a ceiling a busy server hits long before the
+# link itself is the problem.
+set_sysctl() {
+    [ -w "/proc/sys/$1" ] && echo "$2" > "/proc/sys/$1" 2>/dev/null
+}
+# Android sets 1, which makes the device ignore broadcast pings; some LAN
+# discovery helpers use them to find hosts.
+set_sysctl net/ipv4/icmp_echo_ignore_broadcasts 0
+# 1000 drops bursts of small UDP packets, which is exactly what a LAN
+# broadcast scan produces.
+set_sysctl net/core/netdev_max_backlog 5000
+# Android's 37000-50000 leaves ~13k ephemeral ports; a server with many
+# players plus ICE/STUN traffic exhausts that.
+set_sysctl net/ipv4/ip_local_port_range "1024 65535"
+# Listen backlog for the local dashboards and SSH.
+set_sysctl net/core/somaxconn 1024
+set_sysctl net/ipv4/tcp_max_syn_backlog 2048
+log "net tuning: bcast-echo=$(cat /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts 2>/dev/null) backlog=$(cat /proc/sys/net/core/netdev_max_backlog 2>/dev/null) ports=$(cat /proc/sys/net/ipv4/ip_local_port_range 2>/dev/null)"
+
+# mdnsd advertises the device as <net.hostname>.local. Android leaves it empty
+# on a device that never ran the setup wizard, so the chroot's hostname stays
+# "localhost" and every .local lookup gets the wrong answer.
+if [ -z "$(getprop net.hostname 2>/dev/null)" ]; then
+    setprop net.hostname santoni 2>/dev/null && log "net.hostname -> santoni"
+fi
+if [ -f "$UBUNTU_ROOT/etc/hostname" ] && grep -q '^localhost' "$UBUNTU_ROOT/etc/hostname" 2>/dev/null; then
+    echo santoni > "$UBUNTU_ROOT/etc/hostname"
+    log "chroot hostname -> santoni"
+fi
+
+# aid_net_raw (3004) and aid_net_admin (3005) are what Android's paranoid
+# network check looks for before it allows a raw socket or a multicast group
+# join. Only aid_inet is in the chroot's group file, so a non-root process
+# there cannot open a raw socket even though the kernel would allow it.
+for _g in "aid_net_raw:3004" "aid_net_admin:3005"; do
+    _name=${_g%%:*}
+    _gid=${_g##*:}
+    if [ -f "$UBUNTU_ROOT/etc/group" ] && ! grep -q "^$_name:" "$UBUNTU_ROOT/etc/group"; then
+        echo "$_name:x:$_gid:root" >> "$UBUNTU_ROOT/etc/group"
+        log "chroot group $_name ($_gid) added"
+    fi
+done
+
 # sshd refuses to start without /run/sshd, and apt needs a writable /tmp.
 mkdir -p "$UBUNTU_ROOT/tmp" "$UBUNTU_ROOT/run/sshd"
 chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
@@ -321,6 +367,7 @@ if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
             'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
              export TMPDIR=/tmp
              mkdir -p /run/sshd && chmod 0755 /run/sshd
+             ulimit -n 32768 2>/dev/null
              ssh-keygen -A
              /usr/sbin/sshd'; then
         log "sshd started"
