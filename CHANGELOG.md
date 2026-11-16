@@ -78,6 +78,7 @@
 | 72 | v31 | 2aba1f1 | Mount devpts in the chroot so sshd can allocate a pty |
 | 73 | v32 | 86f58bd | Do not trust a stale wpa_supplicant socket at boot |
 | 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
+| 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
 
 ## Releases
 
@@ -1690,6 +1691,36 @@ OTA build, because `/vendor` and `/system` are read-only on the running device.
   Geyser's NetherNet ICE agent could not answer STUN requests sent to a
   client's global IPv6 address and logged `Send failed, errno=101` about three
   times a second. `wifi_bringup` now copies the IPv6 default into `main` too.
+
+### #75 — Start the Minecraft server and NetherNet responder at boot
+
+**Problem**
+The Paper + Geyser server and the NetherNet discovery responder were started by
+hand over SSH, so a reboot left the device with sshd up and no Minecraft server.
+Bedrock clients also saw the wrong LAN entry: the responder took the world name
+from pong field 7 (`motd2`) and the game mode from field 9, which Geyser reports
+as `1`, so the list showed "Creative World - Another Geyser server" instead of
+the real world.
+
+**Fix**
+- `rootdir/init.ubuntu.sh`: call `/root/mcserver/start.sh` in the chroot once
+  sshd is up. The script is idempotent, so a boot hook and a manual run cannot
+  double-start anything.
+- `/root/mcserver/start.sh` and `stop.sh` (on the device, not in this repo):
+  start and stop Paper, the console FIFO holder and the responder, each only
+  when its process is absent.
+- `/root/mcserver/nethernet-discovery.py`: `level_name` now comes from
+  `level-name` in `server.properties` instead of pong field 7, and `game_type`
+  is mapped from pong field 8 (`Survival`) instead of field 9.
+
+**Files**
+- `rootdir/init.ubuntu.sh`
+
+**Impact**
+A reboot brings the server up without a login. The Bedrock LAN entry now reads
+`world` / `A Minecraft Server` in Survival instead of
+`Creative World - Another Geyser server`. The hook only takes effect after the
+next OTA build; on the running device `start.sh` has to be called by hand.
 
 ## Key Changes by Version
 
