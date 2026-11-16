@@ -115,7 +115,15 @@ wlan_ip() {
         | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1
 }
 
-if [ -x /system/bin/wifi ]; then
+# The bring-up runs in the background, after sshd is listening (see the end of
+# this script). A router that is off at boot makes `wifi reconnect` burn its
+# 20 s supplicant wait plus its 30 s association wait, and `wait_ip` another
+# 45 s; none of that may hold up the rest of the boot.
+wifi_bringup() {
+    if [ ! -x /system/bin/wifi ]; then
+        log "no /system/bin/wifi, skipping Wi-Fi bring-up"
+        return 0
+    fi
     ip link set wlan0 up 2>/dev/null
     if [ -s /data/vps_wifi.conf ]; then
         /system/bin/wifi reconnect
@@ -125,13 +133,68 @@ if [ -x /system/bin/wifi ]; then
     /system/bin/wifi dhcp
     _ip=$(wlan_ip)
     log "wlan0 ${_ip:-no address}"
-else
-    log "no /system/bin/wifi, skipping Wi-Fi bring-up"
-fi
+
+    # Android routes unmarked traffic through the main table, which holds only
+    # the local subnet plus an `unreachable default`. Processes inside the
+    # chroot are unmarked, so without a real default route in main every
+    # outbound packet dies with ENETUNREACH and DNS fails no matter which
+    # resolver is configured. Copy the gateway netd put in the wlan0 table
+    # into main.
+    # udhcpc normally installed this route already; the wait covers a device
+    # whose Wi-Fi section could not run, and the add is skipped when the route
+    # is there.
+    _route_try=0
+    while [ $_route_try -lt 30 ]; do
+        GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
+        if [ -n "$GW" ]; then
+            if ! ip route show 2>/dev/null | grep -q '^default via'; then
+                ip route add default via "$GW" dev wlan0 2>/dev/null \
+                    && log "default route -> $GW"
+            fi
+            break
+        fi
+        _route_try=$((_route_try + 1))
+        sleep 2
+    done
+
+    # udhcpc's hook writes resolv.conf from the lease, which is the
+    # authoritative answer and is refreshed on every renewal. Only build one
+    # here when the hook never ran, which is the case on a device with no
+    # saved network. The directory check keeps a device without Ubuntu from
+    # logging a redirect error.
+    if [ -d "$UBUNTU_ROOT/etc" ] && [ ! -s "$UBUNTU_ROOT/etc/resolv.conf" ]; then
+        # Keep every address netd lists, IPv6 included, in netd's order.
+        # Filtering down to IPv4 silently drops the IPv6 resolver, and glibc
+        # tries the entries in sequence, so the order netd chose is the one to
+        # keep.
+        DNS_LIST=$(dumpsys connectivity 2>/dev/null \
+            | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
+            | grep -v '^ *$' | head -1 \
+            | tr ',' '\n' | tr -d ' /' | grep -v '^$')
+        [ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
+        [ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
+        if [ -z "$DNS_LIST" ]; then
+            # Android keeps the default route in a per-network table that
+            # toybox `ip route` does not print, so derive the router from the
+            # subnet.
+            IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
+            [ -n "$IP" ] && DNS_LIST=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
+        fi
+        if [ -n "$DNS_LIST" ]; then
+            {
+                for ns in $DNS_LIST; do echo "nameserver $ns"; done
+                echo "nameserver 8.8.8.8"
+                echo "nameserver 223.5.5.5"
+            } > "$UBUNTU_ROOT/etc/resolv.conf"
+            log "resolv.conf -> $(echo $DNS_LIST)"
+        fi
+    fi
+}
 
 # --- 6. Ubuntu chroot ----------------------------------------------------
 if [ ! -x "$UBUNTU_ROOT/bin/bash" ]; then
     log "no Ubuntu at $UBUNTU_ROOT — run vps-setup over USB"
+    wifi_bringup &
     exit 0
 fi
 
@@ -211,61 +274,6 @@ mkdir -p "$UBUNTU_ROOT/tmp" "$UBUNTU_ROOT/run/sshd"
 chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
-# The chroot keeps its own resolv.conf and the gateway changes when the
-# device moves networks, so refresh it from the current default route.
-# Android resolves through netd and has no resolv.conf to copy, so read the
-# resolvers out of dumpsys first and fall back to the gateway only when that
-# yields nothing.
-# Android routes unmarked traffic through the main table, which holds only the
-# local subnet plus an `unreachable default`. Processes inside the chroot are
-# unmarked, so without a real default route in main every outbound packet dies
-# with ENETUNREACH and DNS fails no matter which resolver is configured. Copy
-# the gateway netd put in the wlan0 table into main.
-# udhcpc normally installed this route already; the wait covers a device whose
-# Wi-Fi section could not run, and the add is skipped when the route is there.
-_route_try=0
-while [ $_route_try -lt 30 ]; do
-    GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
-    if [ -n "$GW" ]; then
-        if ! ip route show 2>/dev/null | grep -q '^default via'; then
-            ip route add default via "$GW" dev wlan0 2>/dev/null \
-                && log "default route -> $GW"
-        fi
-        break
-    fi
-    _route_try=$((_route_try + 1))
-    sleep 2
-done
-
-# udhcpc's hook writes resolv.conf from the lease, which is the authoritative
-# answer and is refreshed on every renewal. Only build one here when the hook
-# never ran, which is the case on a device with no saved network.
-if [ ! -s "$UBUNTU_ROOT/etc/resolv.conf" ]; then
-    # Keep every address netd lists, IPv6 included, in netd's order. Filtering
-    # down to IPv4 silently drops the IPv6 resolver, and glibc tries the
-    # entries in sequence, so the order netd chose is the one to keep.
-    DNS_LIST=$(dumpsys connectivity 2>/dev/null \
-        | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
-        | grep -v '^ *$' | head -1 \
-        | tr ',' '\n' | tr -d ' /' | grep -v '^$')
-    [ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
-    [ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
-    if [ -z "$DNS_LIST" ]; then
-        # Android keeps the default route in a per-network table that toybox
-        # `ip route` does not print, so derive the router from the subnet.
-        IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
-        [ -n "$IP" ] && DNS_LIST=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
-    fi
-    if [ -n "$DNS_LIST" ]; then
-        {
-            for ns in $DNS_LIST; do echo "nameserver $ns"; done
-            echo "nameserver 8.8.8.8"
-            echo "nameserver 223.5.5.5"
-        } > "$UBUNTU_ROOT/etc/resolv.conf"
-        log "resolv.conf -> $(echo $DNS_LIST)"
-    fi
-fi
-
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     # `service ssh start` goes through the Debian init script, which expects
     # systemd and fails silently in a chroot. Generate any missing host keys
@@ -295,3 +303,11 @@ if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
 else
     log "openssh-server not installed — apt install -y openssh-server"
 fi
+
+# --- 7. Wi-Fi, in the background -----------------------------------------
+# sshd is listening by now, so the device becomes reachable the moment the
+# link comes up. Running the bring-up here keeps a dead router from delaying
+# anything else: the script returns and init marks the service done while
+# wpa_cli and udhcpc work through their own timeouts.
+wifi_bringup &
+log "Wi-Fi bring-up running in the background (pid $!)"
