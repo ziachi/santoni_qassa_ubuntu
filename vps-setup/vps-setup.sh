@@ -197,7 +197,10 @@ EOF
 
 # PATH inside the chroot is inherited from Android's shell, which has no
 # /usr/bin, so apt-get is not found unless PATH is set explicitly.
-CHROOT_ENV='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export DEBIAN_FRONTEND=noninteractive'
+# adb shell exports TMPDIR=/data/local/tmp, which does not exist inside the
+# chroot. Package postinst scripts call mktemp, so without overriding it
+# openssh-server fails to configure with exit status 1.
+CHROOT_ENV='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export TMPDIR=/tmp; export DEBIAN_FRONTEND=noninteractive'
 
 if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y openssh-server"; then
     echo "      apt finished"

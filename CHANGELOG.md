@@ -968,6 +968,10 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
+- `vps-setup` and `init.ubuntu.sh` export `TMPDIR=/tmp` inside the chroot.
+  `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist there, so
+  `mktemp` failed and the `openssh-server` postinst aborted with exit status 1
+  — the package unpacked but never configured, leaving no `/usr/sbin/sshd`.
 - `init.ubuntu.sh` starts sshd by running `/usr/sbin/sshd` directly after
   `ssh-keygen -A`, instead of `service ssh start`. The Debian init script
   expects systemd and failed silently in the chroot, so a freshly installed

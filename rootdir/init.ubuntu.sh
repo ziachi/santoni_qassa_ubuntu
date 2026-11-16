@@ -199,6 +199,7 @@ if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     # and run sshd directly instead.
     if chroot "$UBUNTU_ROOT" /bin/sh -c \
             'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+             export TMPDIR=/tmp
              mkdir -p /run/sshd && chmod 0755 /run/sshd
              ssh-keygen -A >/dev/null 2>&1
              /usr/sbin/sshd' >/dev/null 2>&1; then
