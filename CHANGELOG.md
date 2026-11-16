@@ -1339,9 +1339,13 @@ listen, so the delay bought nothing.
   without a chroot still gets Wi-Fi.
 - `resolv.conf` is only written when `$UBUNTU_ROOT/etc` exists, which keeps the
   no-Ubuntu path from logging a redirect error.
+- `wifi` and `udhcpc.script` install as 0755. An `EXECUTABLES` prebuilt is
+  installed with `chmod +x` on the source mode, and a checkout under umask 002
+  leaves the source at 0664, which installed as 0775. `LOCAL_POST_INSTALL_CMD`
+  now pins the mode, so the image no longer depends on the builder's umask.
 
 **Files**
-`rootdir/init.ubuntu.sh`, `CHANGELOG.md`, `README.md`
+`rootdir/init.ubuntu.sh`, `wifi/Android.mk`, `CHANGELOG.md`, `README.md`
 
 **Impact**
 Boot no longer waits on the network. sshd is listening within seconds of
