@@ -1745,6 +1745,10 @@ check looks for before it allows a raw socket or a multicast group join.
   and appends the two missing `aid_net_*` groups to the chroot's `/etc/group`.
 - `rootdir/init.ubuntu.sh`: `ulimit -n 32768` before `sshd` starts, so the
   daemon and everything it spawns inherit the hard limit instead of 1024.
+- `rootdir/init.ubuntu.sh`: section 6b is gone (`09dc324`). It existed only to
+  start the Minecraft server, and that work is dropped, so the boot script no
+  longer names a specific server. `start.sh` / `stop.sh` stay on the device, so
+  the server can still be started by hand over SSH.
 
 **Files**
 - `rootdir/init.ubuntu.sh`
@@ -1752,7 +1756,8 @@ check looks for before it allows a raw socket or a multicast group join.
 **Impact**
 Applied by hand on the running device and read back: all five sysctls report the
 new values, `/etc/group` lists 3003/3004/3005, and `hostname` is `santoni`. The
-boot hook only takes effect after the next OTA build.
+boot hook only takes effect after the next OTA build. The boot script is
+game-agnostic again: nothing in it names a specific server.
 
 ## Key Changes by Version
 
