@@ -19,6 +19,7 @@ TARBALL=/data/local/tmp/ubuntu-base.tar.gz
 PRIMARY_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz
 FALLBACK_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04.5/release/ubuntu-base-22.04.5-base-arm64.tar.gz
 CACERT_DIR=/system/etc/security/cacerts
+BB=/system/bin/busybox
 
 die() {
     echo "vps-setup: $*" >&2
@@ -54,18 +55,35 @@ echo "[3/7] Downloading the Ubuntu rootfs"
 # curl is built into the image from the in-tree external/curl module, so the
 # rootfs is fetched on the device. --capath points libcurl at the platform CA
 # store, which is an OpenSSL-style hashed directory.
+# netd owns DNS for bionic and only learns resolvers from the framework, which
+# is stopped here, so getaddrinfo() fails even with the link up. busybox
+# nslookup builds its own DNS packets, so it still answers.
+resolve() {
+    for ns in $(cat /data/vps_dns 2>/dev/null) 8.8.8.8 223.5.5.5; do
+        addr=$("$BB" nslookup "$1" "$ns" 2>/dev/null \
+            | sed -n 's/^Address[ 0-9]*: *//p' | grep -v ':' | head -1)
+        if [ -n "$addr" ]; then
+            echo "$addr"
+            return 0
+        fi
+    done
+    return 1
+}
+
 fetch() {
+    url=$1
+    host=$(echo "$url" | sed -n 's|^[a-z]*://\([^/]*\).*|\1|p')
     rm -f "$TARBALL"
     if command -v curl >/dev/null 2>&1; then
-        if [ -d "$CACERT_DIR" ]; then
-            curl -fsSL --capath "$CACERT_DIR" -o "$TARBALL" "$1"
-        else
-            curl -fsSL -o "$TARBALL" "$1"
-        fi
+        set -- -fsSL -o "$TARBALL"
+        [ -d "$CACERT_DIR" ] && set -- "$@" --capath "$CACERT_DIR"
+        addr=$(resolve "$host")
+        [ -n "$addr" ] && set -- "$@" --resolve "$host:443:$addr"
+        curl "$@" "$url"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$TARBALL" "$1"
+        wget -q -O "$TARBALL" "$url"
     elif toybox wget --help >/dev/null 2>&1; then
-        toybox wget -q -O "$TARBALL" "$1"
+        toybox wget -q -O "$TARBALL" "$url"
     else
         return 127
     fi
@@ -160,12 +178,14 @@ fi
 # Keep every address netd lists, IPv6 included, in netd's order. Filtering
 # down to IPv4 silently drops the IPv6 resolver, and glibc tries the entries
 # in sequence, so the order netd chose is the one to keep.
-DNS_LIST=$(dumpsys connectivity 2>/dev/null \
+# The DHCP lease is the only thing that still knows the real resolvers: dumpsys
+# needs system_server, and netd never gets a network registered. udhcpc.script
+# writes the lease's list to /data/vps_dns.
+DNS_LIST=$(grep -v '^$' /data/vps_dns 2>/dev/null)
+[ -n "$DNS_LIST" ] || DNS_LIST=$(dumpsys connectivity 2>/dev/null \
     | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
     | grep -v '^ *$' | head -1 \
     | tr ',' '\n' | tr -d ' /' | grep -v '^$')
-[ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
-[ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
 if [ -z "$DNS_LIST" ]; then
     # Android keeps the default route in a per-network table that toybox
     # `ip route` does not print, so derive the router from the subnet.

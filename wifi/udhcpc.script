@@ -31,16 +31,29 @@ case "$1" in
             log "$interface $ip netmask $subnet"
         fi
         if [ -n "$router" ]; then
+            # Android has no `from all lookup main` rule: netd installs the
+            # per-network tables and rules, and with the framework stopped it
+            # never creates them. The rule has to go in before the route,
+            # because the kernel validates the nexthop with fib_lookup(), which
+            # reads the rules -- without it the route is rejected with
+            # ENETUNREACH.
+            ip rule | grep -q "lookup main" \
+                || ip rule add from all lookup main pref 20000 2>/dev/null
             ip route replace default via "$router" dev "$interface" \
-                2>/dev/null && log "default route -> $router"
+                && log "default route -> $router"
         fi
-        if [ -n "$dns" ] && [ -d "$UBUNTU_ROOT/etc" ]; then
-            {
-                for ns in $dns; do echo "nameserver $ns"; done
-                echo "nameserver 8.8.8.8"
-                echo "nameserver 223.5.5.5"
-            } > "$UBUNTU_ROOT/etc/resolv.conf"
-            log "resolv.conf -> $dns"
+        if [ -n "$dns" ]; then
+            # netd only learns resolvers from the framework, so keep the lease's
+            # list where vps-setup and the chroot can read it.
+            printf '%s\n' $dns > /data/vps_dns
+            if [ -d "$UBUNTU_ROOT/etc" ]; then
+                {
+                    for ns in $dns; do echo "nameserver $ns"; done
+                    echo "nameserver 8.8.8.8"
+                    echo "nameserver 223.5.5.5"
+                } > "$UBUNTU_ROOT/etc/resolv.conf"
+                log "resolv.conf -> $dns"
+            fi
         fi
         log "lease ${lease:-?}s from ${serverid:-?}"
         ;;
