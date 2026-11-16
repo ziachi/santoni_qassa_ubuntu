@@ -85,6 +85,20 @@ enter_ubuntu() {
     # /etc/profile in ubuntu-base sets PS1 but never PATH, so a plain
     # `bash -l` keeps Android's PATH and loses /usr/bin. Build the
     # environment here instead of relying on the rootfs.
+    #
+    # chroot keeps the caller's credentials, so the shell also inherits
+    # Android's supplementary groups. /etc/bash.bashrc runs $(groups) for its
+    # sudo hint on every interactive login, and Ubuntu's /etc/group has no
+    # names for those gids, so each one prints "groups: cannot find name for
+    # group ID". setpriv --clear-groups drops them; skip it if util-linux is
+    # missing.
+    if [ -x "$UBUNTU_ROOT/usr/bin/setpriv" ]; then
+        exec chroot "$UBUNTU_ROOT" /usr/bin/env -i \
+            PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            HOME=/root USER=root LOGNAME=root SHELL=/bin/bash \
+            TERM="${TERM:-xterm}" \
+            /usr/bin/setpriv --clear-groups /bin/bash -l
+    fi
     exec chroot "$UBUNTU_ROOT" /usr/bin/env -i \
         PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
         HOME=/root USER=root LOGNAME=root SHELL=/bin/bash \

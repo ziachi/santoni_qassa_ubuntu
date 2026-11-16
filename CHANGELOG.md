@@ -58,6 +58,12 @@
 | 52 | v22 | - | [v22] santoni: fix apt-get PATH inside the chroot (#52) |
 | 53 | v22 | - | [v22] santoni: give the chroot a working PATH and DNS (#53) |
 | 54 | v22 | c82969e | [v22] santoni: Log the boot script and clear the stale sshd pidfile (#54) |
+| 55 | v22 | 2f67f1d | [v22] santoni: use a pushed rootfs in vps-setup instead of deleting it (#55) |
+| 56 | v22 | 35b67c0 | [v22] santoni: retry the rootfs download while netd has no DNS yet (#56) |
+| 57 | v22 | 34fe3d1 | [v22] santoni: use the IPv6 resolver netd actually uses in the chroot (#57) |
+| 58 | v22 | 7c7f3d6 | [v22] santoni: wait for the chroot to resolve before apt runs (#58) |
+| 59 | v22 | 7a2be04 | [v22] santoni: run apt download methods as root in the chroot (#59) |
+| 60 | v22 | - | [v22] santoni: stop the chroot login from printing unknown group IDs (#60) |
 
 ## Releases
 
@@ -1147,6 +1153,57 @@ moved on.
 **Impact**
 `openssh-server` installs on the first run instead of needing a manual
 `apt-get install` afterwards.
+
+### #59 — Run apt's download methods as root in the chroot
+
+**Problem**
+`apt-get update` inside the chroot failed with `Temporary failure resolving
+'ports.ubuntu.com'` even after the resolver and the default route were fixed.
+The kernel is built with `CONFIG_ANDROID_PARANOID_NETWORK`, which only lets a
+process call `socket(AF_INET)` if it is in group `AID_INET` (3003) or holds
+`CAP_NET_RAW`. Root has `CAP_NET_RAW`, so `getent` and `curl` worked, but apt
+drops to `_apt` (uid 42) for its download methods and that user has neither, so
+`socket()` returned `EACCES`. The resolver needs a UDP socket too, so the first
+error to surface was the DNS one, which pointed at the wrong cause. Pinning a
+host in `/etc/hosts` produced the real message: `Could not create a socket for
+<ip> (f=2 t=1 p=6) - socket (13: Permission denied)`.
+
+**Fix**
+- `vps-setup` writes `APT::Sandbox::User "root";` to
+  `/etc/apt/apt.conf.d/99sandbox` before the first `apt-get`.
+
+**Files**
+`vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+`apt-get update` and `apt-get install` work in the chroot on this kernel without
+disabling the paranoid network check. Adding `_apt` to group 3003 is not enough,
+because apt calls `setgroups()` when it drops privileges.
+
+### #60 — Stop the chroot login from printing unknown group IDs
+
+**Problem**
+Every interactive `adb shell` printed eleven lines of
+`groups: cannot find name for group ID <n>` before the prompt. `chroot` does not
+change credentials, so the shell inherits Android's supplementary groups
+(1004, 1007, 1011, 1015, 1028, 3001, 3002, 3003, 3006, 3009, 3011), and
+Ubuntu's `/etc/group` has no names for them. The caller is `/etc/bash.bashrc`,
+whose sudo hint runs `$(groups)` on every interactive login. SSH logins were
+clean because sshd calls `initgroups()` and rebuilds the list from the chroot's
+own `/etc/group`.
+
+**Fix**
+- `ubuntu-enter` runs the login shell through `setpriv --clear-groups`, so the
+  chroot starts with only root's primary group. The plain `bash -l` path is kept
+  as a fallback for a rootfs without `util-linux`.
+
+**Files**
+`ubuntu-enter/ubuntu-enter.sh`, `CHANGELOG.md`
+
+**Impact**
+`adb shell` lands on a clean prompt. Devices on builds before this commit can
+silence it without reflashing with `touch /root/.hushlogin`, which makes
+`/etc/bash.bashrc` skip the sudo hint block entirely.
 
 ## Key Changes by Version
 
