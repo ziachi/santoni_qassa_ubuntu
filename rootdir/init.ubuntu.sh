@@ -141,7 +141,12 @@ wifi_bringup() {
     fi
     ip link set wlan0 up 2>/dev/null
     if [ -s /data/vps_wifi.conf ]; then
-        /system/bin/wifi reconnect
+        _try=0
+        while [ $_try -lt 3 ]; do
+            /system/bin/wifi reconnect && break
+            _try=$((_try + 1))
+            [ $_try -lt 3 ] && sleep 5
+        done
     else
         log "no /data/vps_wifi.conf, run vps-setup to join a network"
     fi

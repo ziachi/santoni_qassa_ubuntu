@@ -51,6 +51,15 @@ ensure_driver() {
     return 1
 }
 
+# A socket file left behind by the previous boot makes a plain -S test pass
+# while nothing is listening, and every wpa_cli call then fails. That is how
+# `wifi reconnect` at boot ended in "add_network failed" with the daemon still
+# starting. Ask the daemon instead of trusting the file.
+supplicant_alive() {
+    [ -S "$WPA_SOCK/$IFACE" ] || return 1
+    [ "$(wpa ping 2>/dev/null)" = "PONG" ]
+}
+
 # wpa_supplicant is `disabled` in init.qcom.rc: the framework starts it, and the
 # framework is gone. Start it here and wait for the control socket. `init.svc`
 # alone is not enough: it can read `running` while the daemon has no interface.
@@ -77,15 +86,16 @@ ensure_supplicant() {
         chmod 0660 "$WPA_CONF" 2>/dev/null
     fi
 
-    [ -S "$WPA_SOCK/$IFACE" ] && return 0
+    supplicant_alive && return 0
     # Restart unconditionally: a daemon left over from a start without the
     # config file has no interface and will never create the socket.
     stop wpa_supplicant 2>/dev/null
+    rm -f "$WPA_SOCK/$IFACE"
     start wpa_supplicant
 
     i=0
     while [ "$i" -lt 20 ]; do
-        [ -S "$WPA_SOCK/$IFACE" ] && return 0
+        supplicant_alive && return 0
         sleep 1
         i=$((i + 1))
     done
@@ -185,6 +195,22 @@ associate() {
     # useful to write. Networks added here live only until the daemon restarts,
     # which is why the credentials are also kept in $CONF.
     id=$(wpa add_network | tail -1)
+    case "$id" in
+        ''|*[!0-9]*)
+            # The daemon can answer ping and still have no interface yet, which
+            # makes add_network fail. Restart it once and try again.
+            stop wpa_supplicant 2>/dev/null
+            rm -f "$WPA_SOCK/$IFACE"
+            start wpa_supplicant
+            i=0
+            while [ "$i" -lt 20 ]; do
+                supplicant_alive && break
+                sleep 1
+                i=$((i + 1))
+            done
+            id=$(wpa add_network | tail -1)
+            ;;
+    esac
     case "$id" in
         ''|*[!0-9]*)
             echo "wifi: add_network failed" >&2
