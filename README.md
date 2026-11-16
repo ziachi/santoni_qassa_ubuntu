@@ -537,6 +537,7 @@ The scan, disconnect and status commands come from
 | SSH says `Permission denied (publickey)` | `PermitRootLogin` is still `prohibit-password`, or the root password was never set | over USB: `adb shell cat /data/ubuntu_root_pass`, then `adb shell "chroot /data/ubuntu passwd root"` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
+| `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
 | `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
 

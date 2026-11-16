@@ -1,0 +1,21 @@
+# openssh-server for the Ubuntu 22.04 arm64 chroot, resolved against the exact
+# package set of ubuntu-base-22.04-base-arm64.tar.gz (101 packages) with
+# --no-install-recommends. Ten packages, no network needed on the device.
+#
+# Regenerate after a jammy point release:
+#   apt-get -o Dir::State::status=<rootfs>/var/lib/dpkg/status \
+#           -o APT::Architecture=arm64 install --print-uris -y \
+#           --no-install-recommends openssh-server
+#
+# Install: adb push these to /data/ubuntu/tmp/, then inside the chroot
+#   DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/libb/libbsd/libbsd0_0.11.5-1_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/libc/libcbor/libcbor0.8_0.8.0-2ubuntu1_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/libe/libedit/libedit2_3.1-20210910-1build1_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/libf/libfido2/libfido2-1_1.10.0-1_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/libm/libmd/libmd0_1.0.4-1build1_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssh/openssh-client_8.9p1-3ubuntu0.18_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssh/openssh-server_8.9p1-3ubuntu0.18_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssh/openssh-sftp-server_8.9p1-3ubuntu0.18_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/t/tcp-wrappers/libwrap0_7.6.q-31build2_arm64.deb
+http://ports.ubuntu.com/ubuntu-ports/pool/main/u/ucf/ucf_3.0043_all.deb

@@ -968,6 +968,10 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
+- `vps-setup/offline-debs.txt` lists the ten arm64 packages `openssh-server`
+  needs on top of the base rootfs, resolved against the exact package set of
+  `ubuntu-base-22.04-base-arm64.tar.gz` with `--no-install-recommends`. It is
+  the fallback for a device whose chroot cannot reach the network at all.
 - `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main
   routing table. Android keeps the real default route in a per-network table
   and leaves an `unreachable default` in main; chroot processes are unmarked,
