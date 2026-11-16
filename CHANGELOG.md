@@ -69,6 +69,7 @@
 | 63 | v23 | 07903cf | [v23] santoni: stop the graphics stack and Zygote at boot (#63) |
 | 64 | v23 | 027fe83 | [v23] santoni: bring Wi-Fi up in the background after sshd (#64) |
 | 65 | v24 | fd4c91c | [v24] santoni: rebrand to qassa_ubuntu22-ziachi-santoni (#65) |
+| 66 | v25 | 59ca5c7 | Start the chroot from `on boot` and drop the unused HALs (#66) |
 
 ## Releases
 
@@ -1388,7 +1389,56 @@ The next build produces
 no longer part of the name, so a new build overwrites the previous zip. Not yet
 verified on hardware: needs the next build.
 
+### #66 — Start the chroot from `on boot` and drop the unused HALs
+
+**Problem**
+`vps-boot` was triggered by `on property:sys.boot_completed=1`. On a device
+whose framework never finishes booting that property is never set, so the
+service never ran: `/data/ubuntu-boot.log` did not exist and
+`/data/adb_wifi_pass` was never created. The first boot after a data wipe
+spends minutes in `dex2oat`, which is exactly when the property is still
+unset, and stopping zygote by hand in the middle of it aborts the boot for
+good. Nothing in the chroot needs Android to be up -- it needs `/data`
+mounted, which happens at `post-fs-data`, well before `boot`.
+
+**Fix**
+- `init.ubuntu.rc` triggers on `on boot` instead of
+  `on property:sys.boot_completed=1`. `on boot` runs after `/data` is mounted
+  and after zygote has started, so the stop sequence still has something to
+  stop.
+- `qrngp` is started explicitly from the same trigger. It normally hangs off
+  `sys.boot_completed`, which never arrives once zygote is stopped, and sshd
+  wants the entropy for its host keys.
+- `init.ubuntu.sh` gains step 4b: `stop` for `qcamerasvr`, `cameraserver`,
+  `ril-daemon`, `ril-daemon2`, `vendor.audio-hal-2-0`, `audioserver`, `media`,
+  `mediaextractor` and `media.swcodec`. Together they hold about 210 MB of
+  RSS, and with zygote gone nothing will ask for them again. `stop` is used
+  rather than a kill so init does not restart them.
+- `init.qcom.rc` passes `-i wlan0` to `wpa_supplicant`.
+- `wifi/wifi.sh` writes `sta` to `/sys/module/wlan/parameters/fwpath` before
+  starting the supplicant, waits for the control socket instead of
+  `init.svc.wpa_supplicant`, and creates the socket directory itself because
+  `on boot` in `/system/etc/init` runs before `init.qcom.rc`'s own `on boot`.
+
+**Files**
+`rootdir/init.ubuntu.rc`, `rootdir/init.ubuntu.sh`, `rootdir/init.qcom.rc`,
+`wifi/wifi.sh`, `CHANGELOG.md`
+
+**Impact**
+The chroot now comes up on every boot without waiting for the framework, and
+the framework is stopped before it can run `dex2oat`. Measured on hardware
+with the framework stopped by hand: 349 MB real usage (`MemTotal -
+MemAvailable`), of which 153 MB is process memory, 85 MB kernel slab and
+76 MB CMA. Step 4b should take the process share down to roughly 50 MB.
+`CmaTotal` is 172 MB reserved by the kernel for camera and display and can
+only be reduced from the device tree.
+
 ## Key Changes by Version
+
+### v25
+- **Boot trigger** — `vps-boot` runs from `on boot`, not `sys.boot_completed`
+- **RAM** — camera, radio and media services are stopped after the framework
+- **Wi-Fi** — `wpa_supplicant` gets `-i wlan0`, helper waits for the socket
 
 ### v24
 - **Rebrand** — the OTA zip is `qassa_ubuntu22-ziachi-santoni.zip`

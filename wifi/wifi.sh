@@ -34,14 +34,33 @@ ip_of() {
         | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1
 }
 
+# The WLAN driver is built into the kernel and only registers wlan0 once the
+# firmware path is written. Stock Android does that from libwifi_hal when the
+# framework starts; with the framework stopped nothing does, so do it here.
+ensure_driver() {
+    [ -d "/sys/class/net/$IFACE" ] && return 0
+    printf 'sta' > /sys/module/wlan/parameters/fwpath 2>/dev/null
+    i=0
+    while [ "$i" -lt 20 ]; do
+        [ -d "/sys/class/net/$IFACE" ] && return 0
+        sleep 1
+        i=$((i + 1))
+    done
+    echo "wifi: $IFACE did not appear, check the firmware" >&2
+    return 1
+}
+
 # wpa_supplicant is `disabled` in init.qcom.rc: the framework starts it, and the
-# framework is gone. Start it here and wait for the control socket.
+# framework is gone. Start it here and wait for the control socket. `init.svc`
+# alone is not enough: it can read `running` while the daemon has no interface.
 ensure_supplicant() {
-    [ "$(getprop init.svc.wpa_supplicant)" = "running" ] && return 0
-    start wpa_supplicant
+    # `on boot` in init.ubuntu.rc runs before init.qcom.rc's own `on boot`,
+    # which is what creates this directory.
+    mkdir -p "$WPA_SOCK" 2>/dev/null
     i=0
     while [ "$i" -lt 20 ]; do
         [ -S "$WPA_SOCK/$IFACE" ] && return 0
+        [ "$(getprop init.svc.wpa_supplicant)" = "running" ] || start wpa_supplicant
         sleep 1
         i=$((i + 1))
     done
@@ -85,6 +104,7 @@ associate() {
     ssid=$1
     psk=$2
 
+    ensure_driver || return 1
     # wificond sets wlan0 down when its client (system_server) dies, so the
     # link has to be brought back up before the supplicant can use it.
     ip link set "$IFACE" up 2>/dev/null
@@ -135,6 +155,7 @@ fi
 
 case "$1" in
     scan)
+        ensure_driver || exit 1
         ensure_supplicant || exit 1
         wpa scan >/dev/null
         sleep 6

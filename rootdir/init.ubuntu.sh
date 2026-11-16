@@ -2,8 +2,9 @@
 #
 # init.ubuntu.sh — bring up the Ubuntu chroot as a 24/7 VPS.
 #
-# Started by init.ubuntu.rc once sys.boot_completed=1, so Android has already
-# finished booting and /data is decrypted and mounted.
+# Started by init.ubuntu.rc from `on boot`, so /data is already decrypted and
+# mounted. Android's own boot is deliberately not waited for: the framework is
+# stopped below, so sys.boot_completed would never arrive.
 
 UBUNTU_ROOT=/data/ubuntu
 ZRAM_DEV=/dev/block/zram0
@@ -94,6 +95,20 @@ done
 sleep 1
 for svc in surfaceflinger vendor.hwcomposer-2-1 zygote zygote_secondary; do
     log "$svc: $(getprop init.svc.$svc)"
+done
+
+# --- 4b. Native services a VPS has no use for ----------------------------
+# Camera, radio and the media stack are the largest things left after the
+# framework goes: qcamerasvr 36 MB, the two rild 56 MB, audioserver 27 MB,
+# mediaextractor 23 MB, media.swcodec 20 MB, the audio HAL 18 MB, mediaserver
+# 17 MB and cameraserver 15 MB -- about 210 MB of RSS between them. Nothing in
+# the chroot touches any of them, and with zygote gone nothing will ask for
+# them again, so stop them once instead of leaving them resident. `stop` also
+# keeps init from restarting them, which a kill would not.
+for svc in qcamerasvr cameraserver ril-daemon ril-daemon2 \
+           vendor.audio-hal-2-0 audioserver media mediaextractor \
+           media.swcodec; do
+    stop "$svc" 2>/dev/null
 done
 
 # The panel keeps the last frame after SurfaceFlinger stops, so blank the

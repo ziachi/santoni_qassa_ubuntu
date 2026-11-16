@@ -376,8 +376,13 @@ service vendor.sensors.qti /vendor/bin/sensors.qti
     group system
     writepid /dev/cpuset/system-background/tasks
 
+# -i wlan0 is not in stock: the framework normally calls
+# ISupplicant.addInterface() over HIDL, and that call is what creates the
+# per-interface control socket. The headless build stops the framework, so the
+# daemon has to own the interface from the start or wpa_cli has nothing to
+# talk to.
 service wpa_supplicant /vendor/bin/hw/wpa_supplicant \
-    -O/data/vendor/wifi/wpa/sockets -puse_p2p_group_interface=1 \
+    -i wlan0 -O/data/vendor/wifi/wpa/sockets -puse_p2p_group_interface=1 \
     -g@android:vendor_wpa_wlan0
 #   we will start as root and wpa_supplicant will switch to user wifi
 #   after setting up the capabilities required for WEXT

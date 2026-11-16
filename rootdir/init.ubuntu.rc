@@ -1,5 +1,11 @@
-# Headless VPS: bring up the Ubuntu chroot once Android has finished booting.
-# Imported from init.qcom.rc.
+# Headless VPS: bring up the Ubuntu chroot and kill the Java runtime as soon as
+# Android's own boot sequence reaches `boot`.
+#
+# The trigger used to be `on property:sys.boot_completed=1`, but that property
+# is only set once the framework finishes booting, and on a device with nothing
+# to boot for it can stay unset for a long time -- the first boot after a data
+# wipe spends minutes in dex2oat. `on boot` runs after /data is mounted and
+# after zygote has started, which is all this needs.
 
 service vps-boot /system/bin/init.ubuntu.sh
     class late_start
@@ -8,5 +14,8 @@ service vps-boot /system/bin/init.ubuntu.sh
     oneshot
     disabled
 
-on property:sys.boot_completed=1
+on boot
+    # qrngp normally starts on sys.boot_completed, which never arrives once
+    # zygote is stopped below. sshd wants the entropy.
+    start qrngp
     start vps-boot
