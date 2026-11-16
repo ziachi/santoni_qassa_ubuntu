@@ -1099,6 +1099,30 @@ failed instantly.
 A clean-flash setup no longer fails because it raced the network's DNS
 configuration. The retry also covers a flaky link during the 27 MB download.
 
+### #57 — Use the IPv6 resolver netd actually uses
+
+**Problem**
+`vps-setup` reached step 7 and `apt-get update` failed with `Temporary failure
+resolving 'ports.ubuntu.com'` on all four suites, so `openssh-server` was never
+installed. The chroot had a working default route and a resolv.conf, but the
+resolver in it was `192.168.110.1` — the gateway, which routes but does not
+answer DNS. The extraction filtered `DnsAddresses` down to IPv4 with
+`grep -o '[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}'`, which discarded
+`240e:37a:4ab:1::1`: the IPv6 resolver netd lists first, and the one that
+actually answers on this network.
+
+**Fix**
+- `vps-setup.sh` and `init.ubuntu.sh` now keep every address from
+  `DnsAddresses`, IPv6 included, in netd's order, and write all of them to
+  `resolv.conf` ahead of the public fallbacks.
+
+**Files**
+`vps-setup/vps-setup.sh`, `rootdir/init.ubuntu.sh`, `CHANGELOG.md`
+
+**Impact**
+`apt` inside the chroot resolves again, so `openssh-server` installs and sshd
+can start on boot.
+
 ## Key Changes by Version
 
 ### v20

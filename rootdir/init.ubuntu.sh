@@ -187,21 +187,28 @@ while [ $_route_try -lt 30 ]; do
     sleep 2
 done
 
-DNS=$(dumpsys connectivity 2>/dev/null \
+# Keep every address netd lists, IPv6 included. Filtering down to IPv4 drops
+# the resolver that actually answers here: netd lists the IPv6 resolver first
+# and the IPv4 gateway second, and the gateway routes but does not answer DNS.
+DNS_LIST=$(dumpsys connectivity 2>/dev/null \
     | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
-    | tr ',' '\n' | grep -o '[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}' | head -1)
-[ -n "$DNS" ] || DNS=$(getprop net.dns1 2>/dev/null)
-[ -n "$DNS" ] || DNS=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
-if [ -z "$DNS" ]; then
+    | grep -v '^ *$' | head -1 \
+    | tr ',' '\n' | tr -d ' /' | grep -v '^$')
+[ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
+[ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -z "$DNS_LIST" ]; then
     # Android keeps the default route in a per-network table that toybox
     # `ip route` does not print, so derive the router from the subnet.
     IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
-    [ -n "$IP" ] && DNS=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
+    [ -n "$IP" ] && DNS_LIST=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
 fi
-if [ -n "$DNS" ]; then
-    printf 'nameserver %s\nnameserver 8.8.8.8\nnameserver 223.5.5.5\n' "$DNS" \
-        > "$UBUNTU_ROOT/etc/resolv.conf"
-    log "resolv.conf -> $DNS"
+if [ -n "$DNS_LIST" ]; then
+    {
+        for ns in $DNS_LIST; do echo "nameserver $ns"; done
+        echo "nameserver 8.8.8.8"
+        echo "nameserver 223.5.5.5"
+    } > "$UBUNTU_ROOT/etc/resolv.conf"
+    log "resolv.conf -> $(echo $DNS_LIST)"
 fi
 
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
