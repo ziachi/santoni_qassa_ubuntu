@@ -243,6 +243,15 @@ mkdir -p "$UBUNTU_ROOT/dev" "$UBUNTU_ROOT/proc" "$UBUNTU_ROOT/sys" \
 if mount -o rbind /dev "$UBUNTU_ROOT/dev" 2>/dev/null; then
     mount -o rslave "$UBUNTU_ROOT/dev" 2>/dev/null
 fi
+# The rbind does not bring /dev/pts on this device, and without devpts
+# posix_openpt fails with ENODEV: apt cannot open its log, and sshd cannot give
+# a session a pty ("PTY allocation request failed on channel 0").
+mkdir -p "$UBUNTU_ROOT/dev/pts"
+if ! grep -q " $UBUNTU_ROOT/dev/pts " /proc/mounts 2>/dev/null; then
+    mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" \
+        -o mode=0620,ptmxmode=0666,gid=5 2>/dev/null \
+        || mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" 2>/dev/null
+fi
 mount -t proc proc "$UBUNTU_ROOT/proc" 2>/dev/null
 mount -t sysfs sysfs "$UBUNTU_ROOT/sys" 2>/dev/null
 chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null

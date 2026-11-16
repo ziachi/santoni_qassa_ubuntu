@@ -260,7 +260,9 @@ fi
 mkdir -p "$UBUNTU_ROOT/dev/pts"
 if grep -q " $UBUNTU_ROOT/dev/pts " /proc/mounts 2>/dev/null; then
     log "/dev/pts already mounted in chroot"
-elif mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" 2>/dev/null; then
+elif mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" \
+        -o mode=0620,ptmxmode=0666,gid=5 2>/dev/null \
+        || mount -t devpts devpts "$UBUNTU_ROOT/dev/pts" 2>/dev/null; then
     log "mounted devpts"
 else
     log "could not mount devpts"
