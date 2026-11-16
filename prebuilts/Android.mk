@@ -16,11 +16,60 @@
 
 LOCAL_PATH := $(call my-dir)
 
+# Every APK that only exists to draw something for a human. The device is a
+# headless VPS: Zygote is stopped at boot, so none of these ever run, and
+# leaving them in the image only costs space.
+#
+# The stub has to be installed for the override to apply, so it is listed in
+# PRODUCT_PACKAGES in qassa_santoni.mk. Keep the two lists in sync.
+#
+# Deliberately absent: framework-res, telephony-common, WcnssService, the
+# providers (SettingsProvider, MediaProvider, TelephonyProvider, ...), the
+# telephony/modem stack (TeleService, Telecom, ims, qcrilmsgtunnel, Stk,
+# MmsService, CellBroadcastReceiver) and the network services (InProcessNetworkStack,
+# SoftAPManager, WfdService, OsuLogin, PlatformCaptivePortalLogin).
 include $(CLEAR_VARS)
 LOCAL_MODULE := RemovePackages
 LOCAL_MODULE_CLASS := APPS
 LOCAL_MODULE_TAGS := optional
-LOCAL_OVERRIDES_PACKAGES := AudioFX Launcher3 Launcher3QuickStep SystemUI GCam XiaomiAddon
+LOCAL_OVERRIDES_PACKAGES := \
+    Aperture \
+    AudioFX \
+    Calendar \
+    Contacts \
+    DeskClock \
+    Dialer \
+    DocumentsUI \
+    DownloadProviderUi \
+    EasterEgg \
+    EmergencyInfo \
+    ExactCalculator \
+    FMRadio \
+    Gallery2 \
+    GamingMode \
+    GCam \
+    Launcher3 \
+    Launcher3QuickStep \
+    LatinIME \
+    LiveWallpapersPicker \
+    MatLog \
+    messaging \
+    MusicFX \
+    OneTimeInitializer \
+    PowerOffAlarm \
+    Provision \
+    Settings \
+    SettingsIntelligence \
+    ShadyQuickStep \
+    SoundPickerPrebuilt \
+    StorageManager \
+    SystemUI \
+    VpnDialogs \
+    WallpaperBackup \
+    WallpaperCropper \
+    WallpaperPicker2 \
+    XiaomiAddon \
+    XiaomiParts
 LOCAL_UNINSTALLABLE_MODULE := true
 LOCAL_CERTIFICATE := PRESIGNED
 LOCAL_SRC_FILES := /dev/null
