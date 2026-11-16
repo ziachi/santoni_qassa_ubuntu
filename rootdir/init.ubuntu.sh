@@ -79,7 +79,57 @@ if [ -e "$PASS_FILE" ]; then
     chown 0:0 "$PASS_FILE" 2>/dev/null
 fi
 
-# --- 4. Ubuntu chroot ----------------------------------------------------
+# --- 4. True headless: stop the graphics stack and the Java runtime ------
+# The device is a VPS: nothing draws, so SurfaceFlinger, the HWC and both
+# zygotes are pure RAM cost. Stopping them frees roughly 300 MB and makes
+# scrcpy impossible. adbd, netd, wpa_supplicant and the chroot's sshd are
+# native services and keep running.
+#
+# SurfaceFlinger goes first: its service definition carries
+# `onrestart restart zygote`, and a stop does not fire onrestart, but stopping
+# zygote first would leave SurfaceFlinger running against a dead client.
+for svc in surfaceflinger vendor.hwcomposer-2-1 zygote zygote_secondary; do
+    stop "$svc" 2>/dev/null
+done
+sleep 1
+for svc in surfaceflinger vendor.hwcomposer-2-1 zygote zygote_secondary; do
+    log "$svc: $(getprop init.svc.$svc)"
+done
+
+# The panel keeps the last frame after SurfaceFlinger stops, so blank the
+# backlight as well.
+if [ -w /sys/class/leds/lcd-backlight/brightness ]; then
+    echo 0 > /sys/class/leds/lcd-backlight/brightness 2>/dev/null \
+        && log "backlight off"
+fi
+
+# --- 5. Wi-Fi without the framework --------------------------------------
+# Zygote is gone, so `cmd wifi` and `svc wifi` no longer exist. wpa_supplicant
+# is a native init service and survives, and /system/bin/wifi drives it
+# directly. The link itself does not survive: wificond's ClientInterfaceImpl
+# destructor runs when its client (system_server) dies and calls
+# SetUpState(false), which takes wlan0 down. So the interface is brought back
+# up and the saved network re-selected, then udhcpc takes over the lease.
+wlan_ip() {
+    ip -4 addr show wlan0 2>/dev/null \
+        | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1
+}
+
+if [ -x /system/bin/wifi ]; then
+    ip link set wlan0 up 2>/dev/null
+    if [ -s /data/vps_wifi.conf ]; then
+        /system/bin/wifi reconnect
+    else
+        log "no /data/vps_wifi.conf, run vps-setup to join a network"
+    fi
+    /system/bin/wifi dhcp
+    _ip=$(wlan_ip)
+    log "wlan0 ${_ip:-no address}"
+else
+    log "no /system/bin/wifi, skipping Wi-Fi bring-up"
+fi
+
+# --- 6. Ubuntu chroot ----------------------------------------------------
 if [ ! -x "$UBUNTU_ROOT/bin/bash" ]; then
     log "no Ubuntu at $UBUNTU_ROOT — run vps-setup over USB"
     exit 0
@@ -171,7 +221,8 @@ chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 # unmarked, so without a real default route in main every outbound packet dies
 # with ENETUNREACH and DNS fails no matter which resolver is configured. Copy
 # the gateway netd put in the wlan0 table into main.
-# Wi-Fi comes up after this script runs, so wait for the gateway to appear.
+# udhcpc normally installed this route already; the wait covers a device whose
+# Wi-Fi section could not run, and the add is skipped when the route is there.
 _route_try=0
 while [ $_route_try -lt 30 ]; do
     GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
@@ -186,28 +237,33 @@ while [ $_route_try -lt 30 ]; do
     sleep 2
 done
 
-# Keep every address netd lists, IPv6 included, in netd's order. Filtering
-# down to IPv4 silently drops the IPv6 resolver, and glibc tries the entries
-# in sequence, so the order netd chose is the one to keep.
-DNS_LIST=$(dumpsys connectivity 2>/dev/null \
-    | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
-    | grep -v '^ *$' | head -1 \
-    | tr ',' '\n' | tr -d ' /' | grep -v '^$')
-[ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
-[ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
-if [ -z "$DNS_LIST" ]; then
-    # Android keeps the default route in a per-network table that toybox
-    # `ip route` does not print, so derive the router from the subnet.
-    IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
-    [ -n "$IP" ] && DNS_LIST=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
-fi
-if [ -n "$DNS_LIST" ]; then
-    {
-        for ns in $DNS_LIST; do echo "nameserver $ns"; done
-        echo "nameserver 8.8.8.8"
-        echo "nameserver 223.5.5.5"
-    } > "$UBUNTU_ROOT/etc/resolv.conf"
-    log "resolv.conf -> $(echo $DNS_LIST)"
+# udhcpc's hook writes resolv.conf from the lease, which is the authoritative
+# answer and is refreshed on every renewal. Only build one here when the hook
+# never ran, which is the case on a device with no saved network.
+if [ ! -s "$UBUNTU_ROOT/etc/resolv.conf" ]; then
+    # Keep every address netd lists, IPv6 included, in netd's order. Filtering
+    # down to IPv4 silently drops the IPv6 resolver, and glibc tries the
+    # entries in sequence, so the order netd chose is the one to keep.
+    DNS_LIST=$(dumpsys connectivity 2>/dev/null \
+        | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
+        | grep -v '^ *$' | head -1 \
+        | tr ',' '\n' | tr -d ' /' | grep -v '^$')
+    [ -n "$DNS_LIST" ] || DNS_LIST=$(getprop net.dns1 2>/dev/null)
+    [ -n "$DNS_LIST" ] || DNS_LIST=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
+    if [ -z "$DNS_LIST" ]; then
+        # Android keeps the default route in a per-network table that toybox
+        # `ip route` does not print, so derive the router from the subnet.
+        IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
+        [ -n "$IP" ] && DNS_LIST=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
+    fi
+    if [ -n "$DNS_LIST" ]; then
+        {
+            for ns in $DNS_LIST; do echo "nameserver $ns"; done
+            echo "nameserver 8.8.8.8"
+            echo "nameserver 223.5.5.5"
+        } > "$UBUNTU_ROOT/etc/resolv.conf"
+        log "resolv.conf -> $(echo $DNS_LIST)"
+    fi
 fi
 
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
