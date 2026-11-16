@@ -79,6 +79,7 @@
 | 73 | v32 | 86f58bd | Do not trust a stale wpa_supplicant socket at boot |
 | 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
 | 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
+| 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
 
 ## Releases
 
@@ -1721,6 +1722,37 @@ A reboot brings the server up without a login. The Bedrock LAN entry now reads
 `world` / `A Minecraft Server` in Survival instead of
 `Creative World - Another Geyser server`. The hook only takes effect after the
 next OTA build; on the running device `start.sh` has to be called by hand.
+
+### #76 — Tune kernel network limits and chroot net groups for game servers
+
+**Problem**
+The device is meant to host more than one game server plus a set of local
+services, but the kernel was still running Android's phone defaults. A
+packet-level audit found five ceilings: `icmp_echo_ignore_broadcasts=1` made the
+device ignore broadcast pings, `netdev_max_backlog=1000` dropped bursts of small
+UDP packets, `ip_local_port_range=37000-50000` left only ~13k ephemeral ports,
+and `somaxconn` / `tcp_max_syn_backlog` were sized for a phone. The chroot's
+`/etc/group` carried only `aid_inet` (3003), so `aid_net_raw` (3004) and
+`aid_net_admin` (3005) were missing — the groups Android's paranoid network
+check looks for before it allows a raw socket or a multicast group join.
+`net.hostname` was empty as well, so mdnsd advertised the device as
+`localhost.localdomain`.
+
+**Fix**
+- `rootdir/init.ubuntu.sh`: new section 6a writes the five sysctls through
+  `/proc/sys`, because toybox has no `sysctl`. It also sets `net.hostname` to
+  `santoni` when the property is empty, rewrites a `localhost` chroot hostname,
+  and appends the two missing `aid_net_*` groups to the chroot's `/etc/group`.
+- `rootdir/init.ubuntu.sh`: `ulimit -n 32768` before `sshd` starts, so the
+  daemon and everything it spawns inherit the hard limit instead of 1024.
+
+**Files**
+- `rootdir/init.ubuntu.sh`
+
+**Impact**
+Applied by hand on the running device and read back: all five sysctls report the
+new values, `/etc/group` lists 3003/3004/3005, and `hostname` is `santoni`. The
+boot hook only takes effect after the next OTA build.
 
 ## Key Changes by Version
 
