@@ -151,7 +151,10 @@ chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
-    if chroot "$UBUNTU_ROOT" /usr/sbin/service ssh start >/dev/null 2>&1; then
+    # Same PATH problem as vps-setup: the chroot inherits Android's PATH,
+    # and the init.d script behind `service` needs /usr/bin.
+    if chroot "$UBUNTU_ROOT" /bin/sh -c \
+            'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /usr/sbin/service ssh start' >/dev/null 2>&1; then
         log "sshd started"
     else
         log "sshd failed to start"

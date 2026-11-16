@@ -55,6 +55,7 @@
 | 49 | v22 | - | [v22] santoni: In-tree curl, 60-column output (#49) |
 | 50 | v22 | - | [v22] santoni: wifi helper and scan backport (#50) |
 | 51 | v22 | - | [v22] santoni: set and print both passwords (#51) |
+| 52 | v22 | - | [v22] santoni: fix apt-get PATH inside the chroot (#52) |
 
 ## Releases
 
@@ -925,6 +926,30 @@ Ubuntu 22.04 defaults to `PermitRootLogin prohibit-password`. The result was a
 `ssh root@<ip>` works right after setup, with no manual step. The trade-off is
 that root password login is enabled on the LAN; use a key and revert
 `PermitRootLogin` if that is not acceptable.
+
+### #52 — Fix `apt-get: not found` inside the chroot
+
+**Problem**
+`vps-setup` step 7 ran `chroot /data/ubuntu /usr/bin/env DEBIAN_FRONTEND=... /bin/sh -c 'apt-get update && ...'`.
+`env` does not reset `PATH`, so the shell inside the chroot inherited Android's
+`PATH` (`/sbin:/system/bin:/system/xbin:...`), which has no `/usr/bin`. dash
+then reported `/bin/sh: 1: apt-get: not found` and `openssh-server` was never
+installed, leaving the device reachable only over adb.
+
+**Fix**
+- Step 7 sets `PATH`, `HOME` and `DEBIAN_FRONTEND` inside the chroot before
+  calling `apt-get`, and checks for `/usr/sbin/sshd` afterwards instead of
+  trusting apt's exit code.
+- `chpasswd` is now called by absolute path (`/usr/sbin/chpasswd`).
+- `init.ubuntu.sh` sets the same `PATH` before `service ssh start`, because the
+  init.d script behind `service` needs `/usr/bin`.
+
+**Files**
+`vps-setup/vps-setup.sh`, `rootdir/init.ubuntu.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+`openssh-server` installs on the first run. Devices already set up can be
+repaired without reflashing by running the chroot `apt-get` command by hand.
 
 ## Key Changes by Version
 

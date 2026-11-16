@@ -165,11 +165,20 @@ nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
 
-if chroot "$UBUNTU_ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
-        /bin/sh -c 'apt-get update && apt-get install -y openssh-server'; then
-    echo "      openssh-server installed"
+# PATH inside the chroot is inherited from Android's shell, which has no
+# /usr/bin, so apt-get is not found unless PATH is set explicitly.
+CHROOT_ENV='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export DEBIAN_FRONTEND=noninteractive'
+
+if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y openssh-server"; then
+    echo "      apt finished"
 else
     echo "      apt failed, run it by hand later"
+fi
+
+if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
+    echo "      openssh-server installed"
+else
+    echo "      openssh-server NOT installed"
 fi
 
 # sshd on Ubuntu 22.04 defaults to PermitRootLogin prohibit-password, and the
@@ -186,7 +195,7 @@ else
 fi
 
 if [ -n "$root_pass" ]; then
-    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" chpasswd 2>/dev/null; then
+    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" /usr/sbin/chpasswd 2>/dev/null; then
         echo "      root password set"
     else
         echo "      could not set the root password"
