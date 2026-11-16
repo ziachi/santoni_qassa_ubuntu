@@ -54,7 +54,7 @@ prompt_password() {
     want=$(expected_password)
     tries=0
     while [ "$tries" -lt "$MAX_TRIES" ]; do
-        printf 'ADB Wi-Fi Password: '
+        printf 'Password: '
         # mksh's "read -s" means "save to history", not "silent", so echo has
         # to be turned off with stty instead.
         stty -echo 2>/dev/null
@@ -90,14 +90,14 @@ enter_ubuntu() {
 if [ "$1" = "-c" ]; then
     shift
     if [ "$DEBUG_NO_PASSWORD" != "1" ] && ! usb_configured && ! prompt_password; then
-        echo "Too many wrong passwords. Closing session."
+        echo "Too many wrong passwords."
         exit 1
     fi
     exec /system/bin/sh -c "$*"
 fi
 
 if [ "$DEBUG_NO_PASSWORD" != "1" ] && ! usb_configured && ! prompt_password; then
-    echo "Too many wrong passwords. Closing session."
+    echo "Too many wrong passwords."
     exit 1
 fi
 

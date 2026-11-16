@@ -26,8 +26,8 @@ die() {
     exit 1
 }
 
-[ -n "$SSID" ] || die "usage: vps-setup <SSID> <WIFI_PASSWORD>"
-[ -n "$WIFI_PASS" ] || die "usage: vps-setup <SSID> <WIFI_PASSWORD>"
+[ -n "$SSID" ] || die "usage: vps-setup <SSID> <PASSWORD>"
+[ -n "$WIFI_PASS" ] || die "usage: vps-setup <SSID> <PASSWORD>"
 
 # ---------------------------------------------------------------- 1. Wi-Fi
 echo "[1/7] Joining Wi-Fi: $SSID"
@@ -64,9 +64,9 @@ if [ -n "$net_id" ]; then
     wpa enable_network "$net_id" >/dev/null
     wpa save_config >/dev/null
     wpa reassociate >/dev/null
-    echo "      wpa_cli joined the network as id $net_id"
+    echo "      wpa_cli network id $net_id"
 else
-    echo "      wpa_cli is not usable on this build"
+    echo "      wpa_cli not usable"
 fi
 
 echo "[2/7] Waiting for an IP address"
@@ -85,7 +85,7 @@ done
 # WifiConfigManager first, so it is kept as the fallback rather than the
 # primary mechanism.
 if [ -z "$ip_addr" ] && cmd wifi help 2>&1 | grep -q "connect-network"; then
-    echo "      retrying through the framework"
+    echo "      retrying via framework"
     cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" >/dev/null 2>&1
     i=0
     while [ "$i" -lt 25 ]; do
@@ -96,11 +96,11 @@ if [ -z "$ip_addr" ] && cmd wifi help 2>&1 | grep -q "connect-network"; then
     done
 fi
 
-[ -n "$ip_addr" ] || die "no IP on wlan0 — check the SSID and password"
+[ -n "$ip_addr" ] || die "no IP on wlan0, check SSID/password"
 echo "      wlan0 = $ip_addr"
 
 # ------------------------------------------------------------- 2. Download
-echo "[3/7] Downloading the Ubuntu 22.04 arm64 base rootfs"
+echo "[3/7] Downloading the Ubuntu rootfs"
 
 # curl is built into the image from the in-tree external/curl module, so the
 # rootfs is fetched on the device. --capath points libcurl at the platform CA
@@ -128,11 +128,9 @@ elif fetch "$FALLBACK_URL"; then
     :
 else
     echo
-    echo "vps-setup: no downloader on the device (no curl, no wget)." >&2
-    echo "Push the rootfs from the host instead, then re-run vps-setup:" >&2
-    echo >&2
-    echo "  curl -LO $PRIMARY_URL" >&2
-    echo "  adb push ubuntu-base-22.04-base-arm64.tar.gz $TARBALL" >&2
+    echo "vps-setup: no downloader on the device." >&2
+    echo "Push the rootfs from the PC instead:" >&2
+    echo "  adb push ubuntu-base.tar.gz /data/local/tmp/" >&2
     echo "  adb shell vps-setup $SSID <password>" >&2
     exit 1
 fi
@@ -144,7 +142,7 @@ echo "      $(du -h "$TARBALL" | cut -f1) in $TARBALL"
 echo "[4/7] Extracting into $UBUNTU_ROOT"
 mkdir -p "$UBUNTU_ROOT" || die "cannot create $UBUNTU_ROOT"
 tar -xzf "$TARBALL" -C "$UBUNTU_ROOT" || die "tar failed"
-[ -x "$UBUNTU_ROOT/bin/bash" ] || die "extracted rootfs has no /bin/bash"
+[ -x "$UBUNTU_ROOT/bin/bash" ] || die "rootfs has no /bin/bash"
 
 for d in dev dev/pts proc sys tmp run; do
     mkdir -p "$UBUNTU_ROOT/$d"
@@ -171,15 +169,15 @@ echo "[6/7] Seeding the ADB Wi-Fi password"
 PASS_FILE=/data/adb_wifi_pass
 if [ ! -s "$PASS_FILE" ]; then
     echo "santoniadmin" > "$PASS_FILE" || die "cannot write $PASS_FILE"
-    echo "      wrote the default password to $PASS_FILE"
+    echo "      wrote the default password"
 else
-    echo "      $PASS_FILE already exists, keeping its value"
+    echo "      $PASS_FILE already exists"
 fi
 chmod 600 "$PASS_FILE" 2>/dev/null
 chown 0:0 "$PASS_FILE" 2>/dev/null
 
 # ---------------------------------------------------- 6. openssh-server
-echo "[7/7] Installing openssh-server inside the chroot"
+echo "[7/7] Installing openssh-server in the chroot"
 
 # apt needs /dev, /proc, /sys and a resolv.conf inside the chroot. These are
 # the same mounts init.ubuntu.sh sets up on every boot; they are torn down
@@ -203,8 +201,7 @@ if chroot "$UBUNTU_ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
         /bin/sh -c 'apt-get update && apt-get install -y openssh-server'; then
     echo "      openssh-server installed"
 else
-    echo "      apt failed — run 'apt update && apt install -y openssh-server'"
-    echo "      inside the chroot once the device has network"
+    echo "      apt failed, run it by hand later"
 fi
 
 umount "$UBUNTU_ROOT/sys" 2>/dev/null
@@ -215,6 +212,5 @@ umount "$UBUNTU_ROOT/dev" 2>/dev/null
 echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"
 echo "  Wi-Fi IP : $ip_addr"
-echo "  Enter    : adb shell   (or ubuntu-enter over Wi-Fi, password santoniadmin)"
-echo "  SSH      : set a root password first — chroot $UBUNTU_ROOT passwd root"
-echo "  Next     : apt update && apt install -y openssh-server"
+echo "  Enter    : adb shell"
+echo "  SSH      : chroot $UBUNTU_ROOT passwd root"

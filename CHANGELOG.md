@@ -52,6 +52,7 @@
 | 46 | v22 | - | [v22] santoni: Install init.ubuntu.sh to system/bin 0755 and its rc to system/etc/init (#46) |
 | 47 | v22 | - | [v22] santoni: Fix const ASensor* in sensor_bridge (#47) |
 | 48 | v22 | - | [v22] santoni: Backport cmd wifi connect-network for Android 10 (#48) |
+| 49 | v22 | - | [v22] santoni: wpa_cli Wi-Fi join, in-tree curl, short output (#49) |
 
 ## Releases
 
@@ -831,6 +832,54 @@ OPTIONAL and pointed at branch `13`, which does not exist on the kernel repo
 No build-system change. A fresh clone following Step 2 now produces a tree that
 gets past the 1% `generated_kernel_includes` failure. The boot image is
 unchanged — it is still the prebuilt Luuvy C.4.0 kernel.
+
+### #49 — wpa_cli Wi-Fi join, in-tree curl, 60-column output
+
+**Problem**
+The first field test on a Redmi 4X (santoni) surfaced three problems.
+
+1. `vps-setup` joined Wi-Fi only through the `cmd wifi connect-network`
+   backport. When the backport is missing the script died with a three-line
+   error, and the command is not part of Android 10 upstream, so the join path
+   depended on a patch that has to be re-applied to every tree.
+2. Step `[3/7]` failed with `no downloader on the device (no curl, no wget)`.
+   Android 10 ships neither, and toybox in this build has no `wget` applet, so
+   the rootfs had to be pushed from a PC by hand.
+3. The step banners and the `adb push` recipe were wider than a Windows CMD
+   window, so the output wrapped and piled up on top of itself.
+
+**Fix**
+- `vps-setup` joins the network through `wpa_cli` directly: `svc wifi enable`,
+  wait for `init.svc.wpa_supplicant`, then
+  `wpa_cli -p /data/vendor/wifi/wpa/sockets -i wlan0` with `add_network`,
+  `set_network <id> ssid`, `set_network <id> psk`, `enable_network`,
+  `save_config` and `reassociate`. The `-p` path is required because
+  `init.qcom.rc` starts the daemon with `-O/data/vendor/wifi/wpa/sockets`.
+- The IPv4 address is read from `ip -4 addr show wlan0` only. `cmd wifi status`
+  does not exist on Android 10, and `getprop dhcp.wlan0.ipaddress` is not
+  populated by the framework's DHCP client.
+- `cmd wifi connect-network` is kept as a fallback, not as the primary path:
+  `ClientModeImpl` disconnects a network it did not create ("Connected to
+  unknown networkId, disconnecting"), so a `wpa_cli`-only join can come up and
+  then be torn down. The fallback runs only when no address appears after 20s.
+- `curl` is added to `PRODUCT_PACKAGES`. The in-tree `external/curl` module
+  builds a platform binary in about a minute and links the system
+  `libssl`/`libcrypto`/`libz`, so no prebuilt static blob is vendored. The
+  downloader passes `--capath /system/etc/security/cacerts`, which is an
+  OpenSSL-style hashed directory.
+- `wpa_cli` is added to `PRODUCT_PACKAGES`. The module is
+  `LOCAL_PROPRIETARY_MODULE`, so it installs to `/vendor/bin/wpa_cli`.
+- Every line `vps-setup` and `ubuntu-enter` print is now under 60 columns.
+
+**Files**
+`vps-setup/vps-setup.sh`, `ubuntu-enter/ubuntu-enter.sh`, `qassa_santoni.mk`,
+`patches/README.md`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+`vps-setup` no longer needs a PC after the ROM is flashed: it joins Wi-Fi and
+downloads the rootfs on the device. The image grows by the `curl` and `wpa_cli`
+binaries. The `cmd wifi connect-network` backport stays applied and is now only
+a fallback.
 
 ## Key Changes by Version
 

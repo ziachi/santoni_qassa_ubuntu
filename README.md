@@ -391,10 +391,15 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 It does seven things:
 
-1. `svc wifi enable`, wait for `wpa_supplicant`, then
-   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>` — a backport, Android 10
-   has no such command upstream, see [patches/README.md](patches/README.md)
-2. wait up to 45s for an IPv4 address on `wlan0`
+1. `svc wifi enable`, wait for `wpa_supplicant`, then join the network through
+   `wpa_cli -p /data/vendor/wifi/wpa/sockets -i wlan0` (`add_network`,
+   `set_network`, `enable_network`, `save_config`, `reassociate`). The
+   `cmd wifi connect-network` backport is only a fallback, because
+   `ClientModeImpl` drops a connection it did not create — see
+   [patches/README.md](patches/README.md)
+2. wait up to 20s for an IPv4 address on `wlan0`, read with
+   `ip -4 addr show wlan0`; if it is still empty, retry through the framework
+   and wait another 25s
 3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
 4. `tar -xzf` it into `/data/ubuntu` and create `dev`, `dev/pts`, `proc`,
    `sys`, `tmp`, `run`
@@ -405,12 +410,13 @@ It does seven things:
 7. mount `/dev`, `/proc` and `/sys` inside the chroot, write a `resolv.conf`,
    then `apt update && apt install -y openssh-server` and unmount again
 
-If the device has no `curl` and no `wget`, the script prints the `adb push`
-recipe instead of failing silently:
+`curl` is built into the image from the in-tree `external/curl` module, so the
+download normally happens on the device. If it is missing (an older build), the
+script prints the `adb push` recipe instead of failing silently:
 
 ```bash
 curl -LO https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz
-adb push ubuntu-base-22.04-base-arm64.tar.gz /data/local/tmp/ubuntu-base.tar.gz
+adb push ubuntu-base-22.04-base-arm64.tar.gz /data/local/tmp/
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
@@ -481,9 +487,9 @@ is append-only and never rotated.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `vps-setup: no IP on wlan0 after 45s` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
-| `Unknown command: connect-network` | the build predates the Android 10 backport | apply `patches/apply-wifi-connect-network.py` and rebuild |
-| `vps-setup: no downloader on the device` | no `curl` and no `wget` | use the `adb push` recipe the script prints |
+| `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `wpa_cli not usable` | `wpa_cli` is missing from the image, or the control socket moved | check `ls /vendor/bin/wpa_cli` and `getprop init.svc.wpa_supplicant` |
+| `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
 | `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
