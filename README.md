@@ -172,13 +172,13 @@ mka qassa -j$(nproc)
 
 > First build: ~4-8 hours (6-core). Subsequent builds with ccache: ~1-3 hours.
 >
-> Output: `out/target/product/santoni/qassa_Sisu-*.zip`
+> Output: `out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip`
 
 ### Step 6: Flash
 
 ```bash
 # Boot into TWRP recovery, then sideload:
-adb sideload out/target/product/santoni/qassa_Sisu-*.zip
+adb sideload out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip
 
 # OR copy ZIP to device and flash from TWRP file manager
 ```

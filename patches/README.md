@@ -118,3 +118,23 @@ device/xiaomi/santoni/patches/apply-wifi-scan.py .
 `ssid`, `dBm` and the security type. `disconnect` calls
 `ClientModeImpl.disconnectCommand()`, `status` reads
 `ClientModeImpl.getWifiInfo()`.
+
+## Branding and the recovery banner
+
+`patches/apply-branding.py` rewrites two files outside this device tree:
+
+- `vendor/qassa/config/branding.mk` — the OTA zip name becomes
+  `qassa_ubuntu22-ziachi-santoni.zip` (codename `ubuntu22`, maintainer `ziachi`).
+  The build date is no longer part of the name, so a new build overwrites the
+  previous zip.
+- `build/make/tools/releasetools/edify_generator.py` — `PrintQASSABanner` used to
+  ignore its arguments and print a joke line. It now prints the build id, the
+  build date and the security patch.
+
+```sh
+cd ~/qassa
+device/xiaomi/santoni/patches/apply-branding.py .
+```
+
+> This patch is not upstream. Re-apply it after every `repo sync` that touches
+> `vendor/qassa` or `build/make`.

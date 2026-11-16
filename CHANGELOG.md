@@ -1352,7 +1352,47 @@ Boot no longer waits on the network. sshd is listening within seconds of
 `sys.boot_completed`, and the link comes up whenever the router answers. Not yet
 verified on hardware: needs the next build.
 
+### #65 — Rebrand the build to qassa_ubuntu22-ziachi-santoni
+
+**Problem**
+The OTA zip was named
+`qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-<date>-Vanilla-signed.zip`, which still
+carried the upstream keepQASSA codename and version number. The recovery banner
+was worse: `FullOTA_Assertions` and `FullOTA_PostValidate` each printed their own
+box, so recovery showed two headers, and `edify_generator.PrintQASSABanner`
+ignored all six arguments it was given and printed a joke line instead of the
+build id, the build date and the security patch. Settings still credited
+`Omansh Krishn` as the maintainer.
+
+**Fix**
+- `vendor/qassa/config/branding.mk` spells the name out as
+  `qassa_$(QASSA_BUILD_CODENAME)-$(QASSA_MAINTAINER)-$(QASSA_BUILD)`, with
+  codename `ubuntu22` and maintainer `ziachi`. A GApps build still gets a
+  `-GApps` suffix so the two variants cannot overwrite each other.
+- `build/make/tools/releasetools/edify_generator.py` prints the build id, the
+  build date and the security patch, plus the previous build for an incremental
+  OTA.
+- `releasetools/releasetools.py` prints one header before the flash and one
+  footer after system and vendor are written, instead of two competing boxes.
+- `qassa_strings.xml` credits `ziachi` as the maintainer.
+
+**Files**
+`patches/apply-branding.py`, `patches/README.md`, `releasetools/releasetools.py`,
+`overlay/packages/apps/Settings/res/values/qassa_strings.xml`, `README.md`,
+`CHANGELOG.md`
+
+**Impact**
+The next build produces
+`out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip`. The build date is
+no longer part of the name, so a new build overwrites the previous zip. Not yet
+verified on hardware: needs the next build.
+
 ## Key Changes by Version
+
+### v24
+- **Rebrand** — the OTA zip is `qassa_ubuntu22-ziachi-santoni.zip`
+- **Recovery banner** — one header, then build id, build date and security patch
+- **Maintainer** — `ziachi` in Settings and in the installer
 
 ### v23
 - **True headless** — `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote` and

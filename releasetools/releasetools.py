@@ -1,19 +1,27 @@
 import common
 
-def FullOTA_PostValidate(info):
-    info.script.AppendExtra('ui_print("  ");')
-    info.script.AppendExtra('ui_print("==========================================");')
-    info.script.AppendExtra('ui_print("  Qassa Ubuntu for Santoni (Unofficial)");')
-    info.script.AppendExtra('ui_print("  Maintainer: ziachi");')
-    info.script.AppendExtra('ui_print("  GitHub: github.com/ziachi");')
-    info.script.AppendExtra('ui_print("  Telegram: t.me/kalomakan");')
-    info.script.AppendExtra('ui_print("==========================================");')
-    info.script.AppendExtra('ui_print("  ");')
+RULE = "=========================================="
+THIN_RULE = "------------------------------------------"
+
+
+def _print(info, *lines):
+    for line in lines:
+        info.script.AppendExtra('ui_print("%s");' % (line,))
+
 
 def FullOTA_Assertions(info):
-    info.script.AppendExtra('ui_print("  ");')
-    info.script.AppendExtra('ui_print("==========================================");')
-    info.script.AppendExtra('ui_print("  Qassa Ubuntu for Xiaomi Redmi 4X (santoni)");')
-    info.script.AppendExtra('ui_print("  Build by ziachi - UNOFFICIAL");')
-    info.script.AppendExtra('ui_print("==========================================");')
-    info.script.AppendExtra('ui_print("  ");')
+    _print(info,
+           RULE,
+           "  Qassa Ubuntu 22.04 for Xiaomi Redmi 4X (santoni)",
+           "  Android 10 (Q) - still flashing in 2026",
+           "  Maintainer: ziachi",
+           RULE)
+
+
+def FullOTA_PostValidate(info):
+    _print(info,
+           THIN_RULE,
+           "  System and vendor written.",
+           "  Writing boot image, then reboot to system.",
+           "  github.com/ziachi - t.me/kalomakan",
+           RULE)
