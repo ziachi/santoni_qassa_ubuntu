@@ -120,7 +120,14 @@ echo "[5/7] Writing resolv.conf and apt sources"
 # Android resolves through netd and has no resolv.conf to copy, so the
 # chroot needs its own. The router is the only DNS server guaranteed to be
 # reachable; the public ones are a fallback because many networks drop them.
-DNS=$(getprop net.dns1 2>/dev/null)
+# Android resolves through netd and has no resolv.conf to copy. The resolver
+# the framework actually uses is the only one known to work on this network,
+# so read it out of dumpsys first. The gateway is not a reliable fallback: on
+# the santoni test network it routes but does not answer DNS.
+DNS=$(dumpsys connectivity 2>/dev/null \
+    | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
+    | tr ',' '\n' | grep -o '[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}' | head -1)
+[ -n "$DNS" ] || DNS=$(getprop net.dns1 2>/dev/null)
 [ -n "$DNS" ] || DNS=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
 if [ -z "$DNS" ]; then
     # Android keeps the default route in a per-network table that toybox
@@ -128,12 +135,12 @@ if [ -z "$DNS" ]; then
     IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
     [ -n "$IP" ] && DNS=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
 fi
-[ -n "$DNS" ] || DNS=192.168.1.1
+[ -n "$DNS" ] || DNS=223.5.5.5
 
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
 nameserver $DNS
 nameserver 8.8.8.8
-nameserver 1.1.1.1
+nameserver 223.5.5.5
 EOF
 
 if [ ! -s "$UBUNTU_ROOT/etc/apt/sources.list" ]; then
@@ -177,7 +184,7 @@ chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
 nameserver $DNS
 nameserver 8.8.8.8
-nameserver 1.1.1.1
+nameserver 223.5.5.5
 EOF
 
 # PATH inside the chroot is inherited from Android's shell, which has no

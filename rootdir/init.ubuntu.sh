@@ -152,7 +152,14 @@ chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
 # The chroot keeps its own resolv.conf and the gateway changes when the
 # device moves networks, so refresh it from the current default route.
-DNS=$(getprop net.dns1 2>/dev/null)
+# Android resolves through netd and has no resolv.conf to copy. The resolver
+# the framework actually uses is the only one known to work on this network,
+# so read it out of dumpsys first. The gateway is not a reliable fallback: on
+# the santoni test network it routes but does not answer DNS.
+DNS=$(dumpsys connectivity 2>/dev/null \
+    | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
+    | tr ',' '\n' | grep -o '[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}' | head -1)
+[ -n "$DNS" ] || DNS=$(getprop net.dns1 2>/dev/null)
 [ -n "$DNS" ] || DNS=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
 if [ -z "$DNS" ]; then
     # Android keeps the default route in a per-network table that toybox
@@ -161,7 +168,7 @@ if [ -z "$DNS" ]; then
     [ -n "$IP" ] && DNS=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
 fi
 if [ -n "$DNS" ]; then
-    printf 'nameserver %s\nnameserver 8.8.8.8\nnameserver 1.1.1.1\n' "$DNS" \
+    printf 'nameserver %s\nnameserver 8.8.8.8\nnameserver 223.5.5.5\n' "$DNS" \
         > "$UBUNTU_ROOT/etc/resolv.conf"
     log "resolv.conf -> $DNS"
 fi

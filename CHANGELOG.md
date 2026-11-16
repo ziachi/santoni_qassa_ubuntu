@@ -968,11 +968,12 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
-- `vps-setup` writes `resolv.conf` from `net.dns1`, falling back to the default
-  route's gateway, and only then to a public resolver. Android keeps the
-  default route in a per-network table that toybox `ip route` does not print,
-  so the gateway is also derived from the `wlan0` subnet when both lookups
-  come up empty.
+- `vps-setup` writes `resolv.conf` from the resolver `dumpsys connectivity`
+  reports, which is the one the framework actually uses. `net.dns1`, the
+  default route's gateway and the `wlan0` subnet are only fallbacks, because
+  on the santoni test network the gateway routes but does not answer DNS.
+  `1.1.1.1` is replaced by `223.5.5.5`, which is reachable on networks that
+  drop the public resolvers.
 - `init.ubuntu.sh` refreshes `resolv.conf` on every boot so a network change
   does not leave the chroot with a dead resolver.
 
