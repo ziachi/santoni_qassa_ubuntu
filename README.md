@@ -3,8 +3,6 @@
 > **keepQASSA Sisu v2.4_0.s** (Android 10) — Unofficial build for santoni.
 > Vanilla, custom signed, with XiaomiAddon & GCam preinstalled.
 
-> im just rebuild the rom the source devicetree it self already clean. 
-
 ---
 
 ## Quick Reference
@@ -15,8 +13,9 @@
 | **Device** | Xiaomi Redmi 4X (santoni) |
 | **SoC** | Qualcomm MSM8937 (Snapdragon 435) |
 | **Lunch** | `qassa_santoni-userdebug` |
-| **Build command** | `mka qassa -j$(nproc)` |
+| **Build command** | `mka installclean && mka qassa` |
 | **Build type** | UNOFFICIAL |
+| **Current release** | [`v1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1) — `86f58bd` |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
 | **SELinux** | Permissive (headless VPS build, see Hard Rule #2) |
 | **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.228 arm64 |
@@ -400,11 +399,12 @@ Flash the ROM, plug in USB, then run one command:
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-It does seven things:
+It does eight things:
 
-1. `svc wifi enable`, wait for `wpa_supplicant`, then
-   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>` — a backport, Android 10
-   has no such command upstream, see [patches/README.md](patches/README.md)
+1. `/system/bin/wifi connect <SSID> <PASSWORD>` — brings `wlan0` up, starts
+   `wpa_supplicant` when needed, adds the network through `wpa_cli` and saves
+   the credentials to `/data/vps_wifi.conf`. `svc wifi` and `cmd wifi` are not
+   used: both go through `system_server`, which the boot script stops.
 2. wait up to 45s for an IPv4 address on `wlan0`, read with
    `ip -4 addr show wlan0`
 3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
@@ -631,16 +631,9 @@ Plain `chroot` is fully supported.
 
 ## Known Issues & Fixes
 
-| # | Issue | Status | Fix |
-|---|-------|--------|-----|
-| 6 | allocator@3.0 bootloop (MSM8937) | Fixed | Remove `<version>3.0</version>` from manifest.xml |
-| 8 | Privapp-permissions bootloop | Fixed | Added whitelist XML for all privapps |
-| 10 | Calendar crash (startService from bg) | Fixed | Debloated via Android.bp overlay |
-| 11 | GameSpace crash | Fixed | Debloated via Android.bp overlay |
-| 15 | SELinux memtrack/libutils denials | Fixed | dontaudit + allow rules |
-| 15 | Vibrator haptic type 2 error | Fixed | Overlay `config_enableHapticTextHandle=false` |
-| 17 | Dolby remnants in device tree | Fixed | Removed all Dolby refs |
-| 22 | Android Override integrated | Fixed | Removed all Override hooks + app |
+Every fixed issue is written up in [CHANGELOG.md](CHANGELOG.md) with its
+Problem / Fix / Files / Impact. Runtime symptoms that are still worth knowing
+about are in [Troubleshooting](#troubleshooting) above.
 
 ### Common Build Errors
 
@@ -661,7 +654,7 @@ Plain `chroot` is fully supported.
 |---|------|
 | 1 | **NEVER `git push --force`** — History is sacred, no exceptions |
 | 2 | **SELinux is Permissive for the headless VPS build** — `androidboot.selinux=permissive` in `BoardConfig.mk`. This supersedes the old "always Enforcing" rule; the Ubuntu chroot needs it. Revert to Enforcing only for a phone build. |
-| 3 | **1 fix = 1 commit** — Format: `[vN] santoni: description (#N)` |
+| 3 | **1 fix = 1 commit** — Imperative subject, no `[vN]` prefix: `mount devpts in the chroot so sshd can allocate a pty` |
 | 4 | **Commit body must include:** Problem / Fix / Files / Impact |
 | 5 | **Don't mix Matrixx patterns with Qassa** — Different ROM, different codebase |
 | 6 | **Don't auto-build** — Wait for explicit "gas build" from maintainer |
@@ -716,7 +709,7 @@ git config --global commit.gpgsign true
 ### Commit Workflow
 1. Make changes
 2. Test build compiles (or get maintainer approval to skip)
-3. Commit with format: `[vN] santoni: description (#N)`
+3. Commit with an imperative subject line, no `[vN]` prefix
 4. Include in commit body: Problem / Fix / Files / Impact
 5. Update README.md and CHANGELOG.md
 6. Push (never force push)
@@ -725,55 +718,11 @@ git config --global commit.gpgsign true
 
 ## Commit History
 
-See [CHANGELOG.md](CHANGELOG.md) for full history.
+Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
+Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-| # | Version | Hash | Change |
-|---|---------|------|--------|
-| 63 | v23 | 07903cf | Stop the graphics stack and Zygote at boot |
-| 62 | v23 | b10ec8d | busybox udhcpc replaces the framework Wi-Fi path |
-| 61 | v23 | bf851d2 | Strip every remaining UI APK from the image |
-| 42 | v22 | - | Fix 5 documentation bugs and script step labels |
-| 41 | v22 | e4e1218 | Re-enable the ADB over Wi-Fi password gate |
-| 40 | v22 | de32ed6 | sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp |
-| 39 | v22 | e20515e | audio-bridge skeleton — PulseAudio over OpenSL ES |
-| 38 | v22 | b77a14f | webcam-bridge skeleton — Camera2 NDK to MJPEG |
-| 37 | v22 | 01bf948 | rbind /dev into the chroot, install sshd, open debug access |
-| 36 | v22 | 37e5a28 | restore surfaceflinger and verify minimal headless packages |
-| 35 | v21 | cdc76d5 | Create /data/adb_wifi_pass on first boot |
-| 34 | v21 | 79bf7e9 | Point docs at the working repo |
-| 33 | v21 | c2a13e3 | Operational guide — quick start, password, troubleshooting |
-| 32 | v21 | 7beb938 | Auto-start Ubuntu, wake lock, ZRAM 2 GB |
-| 31 | v21 | 552ab0c | vps-setup first-run installer |
-| 30 | v21 | 9d13e81 | Dual-auth login shell ubuntu-enter |
-| 29 | v21 | 0acc93c | ADB over USB without signature + Wi-Fi 5555 |
-| 28 | v21 | 4d8f288 | Headless mode + SELinux permissive |
-| 27 | v21 | e5f8c85 | Verify kernel config for chroot VPS |
-| 26 | v21 | 8f96ca1 | Use prebuilt Luuvy kernel |
-| 25 | v20 | 28593f0 | Remove incorrect credit from README |
-| 24 | v20 | d14747c | Update README + CHANGELOG for release |
-| 23 | v20 | 2e0ceda | Add Spectrum kernel profile to XiaomiAddon |
-| 22 | v19 | 727c886 | Fix PinnerService path for flattened APEX |
-| 21 | v18 | c687798 | Fix PinnerService APEX path for Android 10 |
-| 20 | v17 | cfbf6ba | Complete Dolby removal from device tree |
-| 19 | v16 | 3f69e6d | Update README — comprehensive setup guide |
-| 18 | v16 | 32160a3 | Remove Android Override integration |
-| 17 | v15 | df886c1 | Fix README — separate device tree vs override bugs |
-| 16 | v15 | fc1ceaa | Update README + CHANGELOG |
-| 15 | v15 | ae7f47a | Build deps fix + device info overlay |
-| 14 | v15 | ac19f79 | Add Spectrum kernel manager + OverrideSettings SEPolicy |
-| 13 | v15 | aa0fc5d | Remove Dolby from device tree |
-| 12 | v15 | 60526f3 | SEPolicy cleanup — remove non-existent types |
-| 11 | - | 0a1ca39 | Fix 6 bugs from V14 logcat analysis |
-| 10 | - | d3098f2 | Add bug analysis docs + update README |
-| 9 | - | 4032e6f | Fix privapp-permissions bootloop |
-| 8 | - | 34e7353 | Fix credits description |
-| 7 | - | 03332ae | Fix allocator@3.0 bootloop + update docs |
-| 6 | - | 1a9ad2c | Revamp README.md to match Matrixx quality |
-| 5 | - | 392348c | Adapt session rules: add CHANGELOG.md + update README |
-| 4 | - | 172d3f8 | Add ziachi maintainer customizations |
-| 3 | - | cbca51a | Add custom releasetools with credit injection |
-| 2 | - | e187228 | Fix dex2oat duplicate compiler filter crash |
-| 1 | - | db62dda | Update defconfig |
+Current head: `86f58bd` (v32), released as
+[`v1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1).
 
 ---
 
