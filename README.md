@@ -75,6 +75,31 @@ The panel on the right is the device's own `About phone` screen, included for
 the hardware summary. It reports `MSM8937` where the kernel reports `MSM8940`;
 both are the same Snapdragon 435 family, and the device tree targets `msm8937`.
 
+### Idle footprint
+
+![htop inside the chroot on an idle device: 94 tasks, 170M of 1.77G used, no zygote and no system_server](docs/screenshots/htop-idle.png)
+
+`htop` inside the chroot, 31 minutes after boot, with nothing running. The
+process list is the Android host's, not the chroot's — a chroot shares the PID
+namespace, so `htop` sees `init`, `vold`, `netd` and the HAL services.
+
+What matters is what is **not** in the list: no `zygote`, no `system_server`,
+no `app_process`, no `com.android.*`. The framework is stopped, which is the
+whole point of this build.
+
+| Field | Value |
+|---|---|
+| Uptime | 00:31:13 |
+| Tasks | 94, 321 threads, 1 running |
+| Memory | 170M / 1.77G |
+| Swap | 101M / 2.00G |
+| Load average | 3.24 3.10 2.86 |
+| CPU | 7 of 8 cores at 0.0%, one at 3.2% |
+
+The load average looks high next to an idle CPU. Load average counts processes
+in uninterruptible sleep as well as runnable ones, and the Android HAL services
+sit in that state; the CPU bars are the honest number for actual work.
+
 ## Repository Map
 
 All custom repos for this build. Clone each into the matching path inside the
