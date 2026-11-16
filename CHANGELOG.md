@@ -67,6 +67,7 @@
 | 61 | v23 | bf851d2 | [v23] santoni: strip every remaining UI APK from the image (#61) |
 | 62 | v23 | b10ec8d | [v23] santoni: busybox udhcpc replaces the framework Wi-Fi path (#62) |
 | 63 | v23 | 07903cf | [v23] santoni: stop the graphics stack and Zygote at boot (#63) |
+| 64 | v23 | 027fe83 | [v23] santoni: bring Wi-Fi up in the background after sshd (#64) |
 
 ## Releases
 
@@ -1314,6 +1315,39 @@ The device boots with no display server and no Java runtime, and the chroot gets
 the RAM back. Not yet verified on hardware: the stop sequence needs the next
 build, and it cannot be tested over SSH because it is the link being torn down.
 
+### #64 — Bring Wi-Fi up in the background after sshd
+
+**Problem**
+`init.ubuntu.sh` ran the whole Wi-Fi bring-up in the foreground, before the
+chroot and sshd. With the router off at boot, `wifi reconnect` sits through its
+20 s supplicant wait plus its 30 s association wait, and `wait_ip` another 45 s,
+so everything after it — the mounts and sshd itself — was delayed by up to 95 s
+for a network that was never going to come up. sshd does not need the network to
+listen, so the delay bought nothing.
+
+**Fix**
+- The bring-up is now a `wifi_bringup` function: `ip link set wlan0 up`,
+  `wifi reconnect` when `/data/vps_wifi.conf` exists, `wifi dhcp`, then the
+  default route and the chroot's `resolv.conf`.
+- The script launches it with `&` as the last step, after sshd is listening, and
+  returns immediately. `vps-boot` is a `oneshot` service, so init does not kill
+  the process group when the script exits and the background job survives.
+- The default route and `resolv.conf` moved out of the chroot section into that
+  function. They depend on the lease, so leaving them in the foreground would
+  have kept the 60 s route wait on the boot path.
+- The no-Ubuntu path launches the same function before its `exit 0`, so a device
+  without a chroot still gets Wi-Fi.
+- `resolv.conf` is only written when `$UBUNTU_ROOT/etc` exists, which keeps the
+  no-Ubuntu path from logging a redirect error.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+Boot no longer waits on the network. sshd is listening within seconds of
+`sys.boot_completed`, and the link comes up whenever the router answers. Not yet
+verified on hardware: needs the next build.
+
 ## Key Changes by Version
 
 ### v23
@@ -1322,6 +1356,8 @@ build, and it cannot be tested over SSH because it is the link being torn down.
 - **Every UI APK overridden** — 37 names in `LOCAL_OVERRIDES_PACKAGES`
 - **Wi-Fi without the framework** — `wpa_cli` + busybox `udhcpc`, credentials in
   `/data/vps_wifi.conf`, `wifi` wrapper inside the chroot
+- **Wi-Fi in the background** — the bring-up runs after sshd, so a dead router
+  no longer delays boot
 - **busybox** — static aarch64 1.37.0 for `udhcpc` and `wget`
 
 ### v20

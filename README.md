@@ -460,10 +460,10 @@ prohibit-password` back.
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
 | Headless | `stop surfaceflinger`, `stop vendor.hwcomposer-2-1`, `stop zygote`, `stop zygote_secondary`, then `echo 0 > /sys/class/leds/lcd-backlight/brightness` |
-| Wi-Fi | `ip link set wlan0 up`, `wifi reconnect` when `/data/vps_wifi.conf` exists, then `wifi dhcp` to start the udhcpc daemon |
 | Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
 | sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
 | SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently. `/run/sshd.pid` is removed first, because `/run` lives on `/data` and a stale PID there would name an unrelated process |
+| Wi-Fi (background) | launched with `&` once sshd is listening: `ip link set wlan0 up`, `wifi reconnect` when `/data/vps_wifi.conf` exists, `wifi dhcp` to start the udhcpc daemon, then the default route and the chroot's `resolv.conf` |
 
 `/dev` is rbind-mounted rather than bind-mounted because ueventd keeps creating
 nodes after boot; a plain bind would freeze the chroot's view at the moment of
@@ -482,6 +482,15 @@ The headless step runs before the Wi-Fi step on purpose. `wificond`'s
 brings it back up and re-selects the saved network afterwards. Joining a network
 before the stop would be undone by `ClientModeImpl`, which disconnects any
 network it does not know about.
+
+The Wi-Fi step itself runs in the background, after sshd is listening. A router
+that is off at boot makes `wifi reconnect` sit through its 20 s supplicant wait
+and its 30 s association wait, and `wait_ip` another 45 s, so running it in the
+foreground would hold the rest of the boot for up to 95 s. sshd does not need
+the network to listen, so the script starts it first, launches the bring-up with
+`&`, and returns. The default route and the chroot's `resolv.conf` are written
+by that background job once the lease arrives, which is also why they are no
+longer part of the chroot section.
 
 `stop` does not fire `onrestart`, so nothing restarts the four services. They
 are `class main`, and `class_start main` only runs once, at boot.
