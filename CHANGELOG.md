@@ -968,6 +968,10 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
+- `init.ubuntu.sh` starts sshd by running `/usr/sbin/sshd` directly after
+  `ssh-keygen -A`, instead of `service ssh start`. The Debian init script
+  expects systemd and failed silently in the chroot, so a freshly installed
+  sshd never listened and the port answered `Connection refused`.
 - `vps-setup/offline-debs.txt` lists the ten arm64 packages `openssh-server`
   needs on top of the base rootfs, resolved against the exact package set of
   `ubuntu-base-22.04-base-arm64.tar.gz` with `--no-install-recommends`. It is

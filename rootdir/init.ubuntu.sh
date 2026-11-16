@@ -194,10 +194,14 @@ if [ -n "$DNS" ]; then
 fi
 
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
-    # Same PATH problem as vps-setup: the chroot inherits Android's PATH,
-    # and the init.d script behind `service` needs /usr/bin.
+    # `service ssh start` goes through the Debian init script, which expects
+    # systemd and fails silently in a chroot. Generate any missing host keys
+    # and run sshd directly instead.
     if chroot "$UBUNTU_ROOT" /bin/sh -c \
-            'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; /usr/sbin/service ssh start' >/dev/null 2>&1; then
+            'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+             mkdir -p /run/sshd && chmod 0755 /run/sshd
+             ssh-keygen -A >/dev/null 2>&1
+             /usr/sbin/sshd' >/dev/null 2>&1; then
         log "sshd started"
     else
         log "sshd failed to start"
