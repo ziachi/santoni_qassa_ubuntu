@@ -391,15 +391,11 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 It does seven things:
 
-1. `svc wifi enable`, wait for `wpa_supplicant`, then join the network through
-   `wpa_cli -p /data/vendor/wifi/wpa/sockets -i wlan0` (`add_network`,
-   `set_network`, `enable_network`, `save_config`, `reassociate`). The
-   `cmd wifi connect-network` backport is only a fallback, because
-   `ClientModeImpl` drops a connection it did not create — see
-   [patches/README.md](patches/README.md)
-2. wait up to 20s for an IPv4 address on `wlan0`, read with
-   `ip -4 addr show wlan0`; if it is still empty, retry through the framework
-   and wait another 25s
+1. `svc wifi enable`, wait for `wpa_supplicant`, then
+   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>` — a backport, Android 10
+   has no such command upstream, see [patches/README.md](patches/README.md)
+2. wait up to 45s for an IPv4 address on `wlan0`, read with
+   `ip -4 addr show wlan0`
 3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
 4. `tar -xzf` it into `/data/ubuntu` and create `dev`, `dev/pts`, `proc`,
    `sys`, `tmp`, `run`
@@ -488,7 +484,7 @@ is append-only and never rotated.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
-| `wpa_cli not usable` | `wpa_cli` is missing from the image, or the control socket moved | check `ls /vendor/bin/wpa_cli` and `getprop init.svc.wpa_supplicant` |
+| `Unknown command: connect-network` | the build predates the Android 10 backport | apply `patches/apply-wifi-connect-network.py` and rebuild |
 | `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
 | `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
