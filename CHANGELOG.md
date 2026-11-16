@@ -57,6 +57,7 @@
 | 51 | v22 | - | [v22] santoni: set and print both passwords (#51) |
 | 52 | v22 | - | [v22] santoni: fix apt-get PATH inside the chroot (#52) |
 | 53 | v22 | - | [v22] santoni: give the chroot a working PATH and DNS (#53) |
+| 54 | v22 | c82969e | [v22] santoni: Log the boot script and clear the stale sshd pidfile (#54) |
 
 ## Releases
 
@@ -1008,6 +1009,41 @@ Two follow-on failures from #52, both seen on the first real device run:
 `adb shell` lands in a usable shell and `apt-get install` works on the first
 run. Devices already set up can be repaired without reflashing by exporting
 `PATH` and pointing `/etc/resolv.conf` at the router.
+
+### #54 — Log the boot script and clear the stale sshd pidfile
+
+**Problem**
+After a reboot, SSH answered `Connection refused` and the only way back was to
+run a repair script over USB. Nothing in the boot path left a trace:
+`adb logcat -s vps-boot` and `dmesg | grep vps-boot` both came back empty,
+because init sends a service's stdout to `/dev/null`. The README documented the
+logcat command as if it worked, which sent the investigation after the wrong
+cause for a while.
+
+`/run` inside the chroot lives on `/data`, so `/run/sshd.pid` survives a
+reboot. On builds that still used `service ssh start`, `start-stop-daemon`
+treated a live PID in that file as "sshd already running", and `--oknodo` made
+the init script exit 0 — so the boot log said `sshd started` while port 22 was
+empty.
+
+**Fix**
+- `init.ubuntu.sh` writes its output to `/data/ubuntu-boot.log`, capped at
+  64 KB, so a failed bring-up can be read after the fact.
+- `init.ubuntu.sh` removes `/run/sshd.pid` before starting sshd.
+- sshd's own stderr is no longer discarded, and the script checks afterwards
+  whether port 22 is listening, logging `sshd listening on :22` or
+  `sshd is NOT listening on :22`.
+- `README.md` replaces the `adb logcat -s vps-boot` instruction with
+  `adb shell cat /data/ubuntu-boot.log`, and gains a troubleshooting row for
+  `Connection refused` after a reboot.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+A device that fails to bring sshd up now says why, in a file that survives the
+boot. Devices on builds before `c82969e` can be repaired without reflashing by
+removing the pidfile and starting sshd by hand.
 
 ## Key Changes by Version
 

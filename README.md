@@ -450,7 +450,7 @@ prohibit-password` back.
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
 | Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
 | sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
-| SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently |
+| SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently. `/run/sshd.pid` is removed first, because `/run` lives on `/data` and a stale PID there would name an unrelated process |
 
 `/dev` is rbind-mounted rather than bind-mounted because ueventd keeps creating
 nodes after boot; a plain bind would freeze the chroot's view at the moment of
@@ -461,11 +461,18 @@ and busybox is used when the built-in mount understands neither.
 
 `fstab.qcom` already asks for `zramsize=2147483648`, so the ZRAM step is
 normally just a check — it exists for a device that booted with the old 1 GB
-fstab. Everything logs under the `vps-boot:` tag:
+fstab.
+
+init sends a service's stdout to `/dev/null`, so `adb logcat -s vps-boot` and
+`dmesg | grep vps-boot` both come back empty even when the script ran. The
+script keeps its own log instead, capped at 64 KB:
 
 ```bash
-adb logcat -s vps-boot
+adb shell cat /data/ubuntu-boot.log
 ```
+
+The last lines say whether sshd actually came up: `sshd started` followed by
+`sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
 
 ### Hardware bridges (disabled)
 
@@ -538,8 +545,9 @@ The scan, disconnect and status commands come from
 | `chpasswd` exits 0 but the password is still rejected | PAM inside the chroot cannot complete the change, so nothing is written to `/etc/shadow` | write the hash directly, which skips PAM: `adb shell "chroot /data/ubuntu /usr/sbin/usermod -p '<sha512-crypt-hash>' root"`. Keep the single quotes and do not wrap this in `bash -c`: the hash contains `$`, and a second parse expands `$6`, `$salt` and the leading part of the digest, storing a truncated string that no password can match. Generate the hash with `openssl passwd -6 -salt santoni <password>` |
 | SSH still rejects a correct password after the hash is in `/etc/shadow` | PAM inside the chroot cannot complete authentication, usually because `/dev` or `/proc` is not mounted, so `pam_unix` and `pam_loginuid` fail | set `UsePAM no` in `/etc/ssh/sshd_config` and restart sshd; it then compares the password itself with `crypt()` and loads no PAM modules. Confirm the account is not locked with `chroot /data/ubuntu /usr/bin/passwd -S root`, which prints `P` for a usable password |
 | SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin | /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
+| SSH says `Connection refused` after a reboot | sshd never started. On builds before `c82969e` the boot script used `service ssh start`, and `start-stop-daemon` skips the start when `/run/sshd.pid` still names a live PID; `--oknodo` then hides the failure and the log still says `sshd started` | rebuild with `c82969e` or later. On a running device: `adb shell "rm -f /data/ubuntu/run/sshd.pid; chroot /data/ubuntu /usr/sbin/sshd"` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
-| `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
+| `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
 | `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
 | `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
