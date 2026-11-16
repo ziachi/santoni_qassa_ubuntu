@@ -98,3 +98,23 @@ adb shell ip -4 addr show wlan0
 
 > This patch is not upstream. Re-apply it after every `repo sync` that touches
 > `frameworks/opt/net/wifi`.
+
+## `cmd wifi scan`
+
+`patches/apply-wifi-scan.py` adds `scan`, `list-scan-results`, `disconnect` and
+`status` to `WifiShellCommand`. Android 11 has all four; Android 10 has none,
+and `dumpsys wifi` prints no scan results on Q.
+
+Run it after `apply-wifi-connect-network.py`, because it anchors its help text
+on the `connect-network` lines that patch adds.
+
+```sh
+cd ~/qassa
+device/xiaomi/santoni/patches/apply-wifi-scan.py .
+```
+
+`scan` uses `WifiScanner` from `WifiInjector.getWifiScanner()` with
+`WIFI_BAND_BOTH_WITH_DFS`, waits up to 15s for the result batch, and prints
+`ssid`, `dBm` and the security type. `disconnect` calls
+`ClientModeImpl.disconnectCommand()`, `status` reads
+`ClientModeImpl.getWifiInfo()`.

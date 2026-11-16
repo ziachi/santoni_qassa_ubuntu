@@ -95,6 +95,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 PRODUCT_PACKAGES += \
     ubuntu-enter \
     vps-setup \
+    wifi \
     init.ubuntu.sh \
     init.ubuntu.rc \
     webcam_bridge \

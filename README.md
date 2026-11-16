@@ -479,6 +479,36 @@ tree; the config fails to load until they are installed in the chroot.
 `/dev/input` directly would split the evdev queue with `system_server`. The log
 is append-only and never rotated.
 
+### Wi-Fi helper: `wifi`
+
+`cmd wifi` on Android 10 has no scan, disconnect or status, and the raw
+commands are long enough to wrap in a CMD window. `wifi` is a short front-end
+installed to `/system/bin/wifi`:
+
+```sh
+adb root
+adb shell wifi scan
+adb shell wifi connect aeqaeqa <password>
+adb shell wifi status
+adb shell wifi disconnect
+adb shell wifi help
+```
+
+`wifi scan` prints one line per network, strongest first:
+
+```
+aeqaeqa            -45 dBm  WPA2
+IndiHome-1234      -72 dBm  WPA2
+```
+
+`wifi connect` enables the radio, waits for `wpa_supplicant`, joins the network
+and prints the address it got. `wifi status` prints the ssid, the signal and
+the IP. All of it needs root, so run `adb root` first.
+
+The scan, disconnect and status commands come from
+[patches/apply-wifi-scan.py](patches/apply-wifi-scan.py), which adds them to
+`WifiShellCommand` the same way `connect-network` was added.
+
 ### Troubleshooting
 
 | Symptom | Cause | Fix |

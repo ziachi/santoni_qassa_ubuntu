@@ -53,6 +53,7 @@
 | 47 | v22 | - | [v22] santoni: Fix const ASensor* in sensor_bridge (#47) |
 | 48 | v22 | - | [v22] santoni: Backport cmd wifi connect-network for Android 10 (#48) |
 | 49 | v22 | - | [v22] santoni: In-tree curl, 60-column output (#49) |
+| 50 | v22 | - | [v22] santoni: wifi helper and scan backport (#50) |
 
 ## Releases
 
@@ -870,6 +871,34 @@ backport connected on the first try and `ip -4 addr show wlan0` reported
 `vps-setup` no longer needs a PC after the ROM is flashed: it joins Wi-Fi and
 downloads the rootfs on the device. The image grows by the `curl` binary. The
 Wi-Fi join path is unchanged.
+
+### #50 — `wifi` helper and the scan backport
+
+**Problem**
+Android 10's `cmd wifi` has no `scan`, `disconnect` or `status`, and
+`dumpsys wifi` does not print scan results on Q: `WifiServiceImpl.dump()` never
+reaches `WifiConnectivityManager`, and `ClientModeImpl.dump()` only prints the
+current `WifiInfo`. So there was no way to list nearby networks from a shell.
+The commands that did exist were also long enough to wrap in a CMD window.
+
+**Fix**
+- `patches/apply-wifi-scan.py` adds `scan`, `list-scan-results`, `disconnect`
+  and `status` to `WifiShellCommand`, following the same shape as the
+  `connect-network` backport. `scan` drives `WifiScanner` from
+  `WifiInjector.getWifiScanner()`, waits up to 15s for the result batch, and
+  prints one line per network sorted by signal.
+- `wifi/wifi.sh` installs to `/system/bin/wifi` and gives the short form:
+  `wifi scan`, `wifi connect <ssid> [password]`, `wifi disconnect`,
+  `wifi status`, `wifi help`. Every line stays under 60 columns.
+
+**Files**
+`patches/apply-wifi-scan.py`, `wifi/wifi.sh`, `wifi/Android.mk`,
+`qassa_santoni.mk`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+Nearby networks can be listed from the device. The Wi-Fi join path is
+unchanged: `wifi connect` calls the same `cmd wifi connect-network` that
+`vps-setup` uses.
 
 ## Key Changes by Version
 
