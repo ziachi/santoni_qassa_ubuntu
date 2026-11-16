@@ -14,6 +14,17 @@ log() {
     echo "vps-boot: $*"
 }
 
+# init sends a service's stdout to /dev/null, so nothing this script prints is
+# visible after boot and a failed bring-up leaves no trace. Keep a copy on
+# /data, capped so it cannot grow without bound across reboots.
+BOOT_LOG=/data/ubuntu-boot.log
+if [ -f "$BOOT_LOG" ]; then
+    _size=$(wc -c < "$BOOT_LOG" 2>/dev/null)
+    [ "${_size:-0}" -gt 65536 ] && : > "$BOOT_LOG"
+fi
+exec >>"$BOOT_LOG" 2>&1
+log "=== boot $(date) ==="
+
 # --- 1. Anti deep-sleep --------------------------------------------------
 # A held wake lock keeps the SoC out of suspend so sshd stays reachable.
 if [ -w /sys/power/wake_lock ]; then
@@ -197,15 +208,27 @@ if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     # `service ssh start` goes through the Debian init script, which expects
     # systemd and fails silently in a chroot. Generate any missing host keys
     # and run sshd directly instead.
+    # /run lives on /data, so /run/sshd.pid survives a reboot and can name a
+    # PID that now belongs to an unrelated process. Clear it first so nothing
+    # mistakes the previous daemon for a running one.
+    rm -f "$UBUNTU_ROOT/run/sshd.pid"
+    # sshd's own stderr is kept: it is the only place that says why a start
+    # failed, and it now lands in $BOOT_LOG.
     if chroot "$UBUNTU_ROOT" /bin/sh -c \
             'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
              export TMPDIR=/tmp
              mkdir -p /run/sshd && chmod 0755 /run/sshd
-             ssh-keygen -A >/dev/null 2>&1
-             /usr/sbin/sshd' >/dev/null 2>&1; then
+             ssh-keygen -A
+             /usr/sbin/sshd'; then
         log "sshd started"
     else
         log "sshd failed to start"
+    fi
+    sleep 1
+    if netstat -tln 2>/dev/null | grep -q ':22 '; then
+        log "sshd listening on :22"
+    else
+        log "sshd is NOT listening on :22"
     fi
 else
     log "openssh-server not installed — apt install -y openssh-server"
