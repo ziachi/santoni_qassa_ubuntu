@@ -70,6 +70,7 @@
 | 64 | v23 | 027fe83 | [v23] santoni: bring Wi-Fi up in the background after sshd (#64) |
 | 65 | v24 | fd4c91c | [v24] santoni: rebrand to qassa_ubuntu22-ziachi-santoni (#65) |
 | 66 | v25 | 59ca5c7 | Start the chroot from `on boot` and drop the unused HALs (#66) |
+| 67 | v26 | b24d68a | Fix wpa_supplicant socket dir + set clock after DHCP (#67) |
 
 ## Releases
 
@@ -1433,7 +1434,44 @@ MemAvailable`), of which 153 MB is process memory, 85 MB kernel slab and
 `CmaTotal` is 172 MB reserved by the kernel for camera and display and can
 only be reduced from the device tree.
 
+### #67 — Fix the wpa_supplicant socket directory and set the clock after DHCP
+
+**Problem**
+Two things broke the first headless boot. `ensure_supplicant` created
+`/data/vendor/wifi/wpa/sockets` with `mkdir -p` from `on boot`, which runs
+before `init.qcom.rc`'s own `on boot`. init's `mkdir ... 0770 wifi wifi` then
+failed because the path already existed, so the directory stayed `root:root`
+and `wpa_supplicant` could not bind its control socket after dropping to the
+`wifi` user. `vps-setup` died at step 1 with `wpa_supplicant did not come up`.
+
+Separately, the boot log was stamped `Thu Jan 1 00:23:17 GMT 1970`. With the
+framework stopped nothing sets the clock -- `NetworkTimeUpdateService` lives in
+`system_server` -- and the device has no battery-backed RTC. Every HTTPS
+request then fails with `certificate is not yet valid`, which is exactly what
+the rootfs download and `apt` do.
+
+**Fix**
+- `ensure_supplicant` no longer creates the directory. It waits for init to
+  create it and only starts the daemon once the directory exists.
+- `wifi.sh` gains `set_clock`, called after DHCP in both `connect` and
+  `reconnect`. It reads the `Date` header from
+  `http://connectivitycheck.gstatic.com/generate_204` -- plain HTTP needs no
+  clock -- and sets the system time with toybox `date -u MMDDhhmmCCYY.ss`,
+  falling back to `-D` for builds that parse it.
+
+**Files**
+`wifi/wifi.sh`, `CHANGELOG.md`
+
+**Impact**
+`vps-setup` gets past step 1 and the clock is sane before the first HTTPS
+request. Verified in the image: `system/bin/wifi` has three `set_clock`
+references and no `mkdir -p "$WPA_SOCK"`. Not yet verified on hardware.
+
 ## Key Changes by Version
+
+### v26
+- **Wi-Fi** — the socket directory is left to init, so `wpa_supplicant` can bind
+- **Clock** — set from the HTTP `Date` header after DHCP, HTTPS works again
 
 ### v25
 - **Boot trigger** — `vps-boot` runs from `on boot`, not `sys.boot_completed`

@@ -54,13 +54,17 @@ ensure_driver() {
 # framework is gone. Start it here and wait for the control socket. `init.svc`
 # alone is not enough: it can read `running` while the daemon has no interface.
 ensure_supplicant() {
-    # `on boot` in init.ubuntu.rc runs before init.qcom.rc's own `on boot`,
-    # which is what creates this directory.
-    mkdir -p "$WPA_SOCK" 2>/dev/null
+    # init.qcom.rc creates this directory as `0770 wifi wifi` from its own
+    # `on boot`, which runs after ours. Never create it here: a root-owned
+    # directory makes wpa_supplicant fail to bind its control socket once it
+    # drops to the wifi user, and init's own `mkdir` then fails because the
+    # path already exists, so the wrong owner sticks.
     i=0
     while [ "$i" -lt 20 ]; do
         [ -S "$WPA_SOCK/$IFACE" ] && return 0
-        [ "$(getprop init.svc.wpa_supplicant)" = "running" ] || start wpa_supplicant
+        if [ -d "$WPA_SOCK" ]; then
+            [ "$(getprop init.svc.wpa_supplicant)" = "running" ] || start wpa_supplicant
+        fi
         sleep 1
         i=$((i + 1))
     done
@@ -98,6 +102,38 @@ wait_ip() {
         i=$((i + 1))
     done
     return 1
+}
+
+# Nothing sets the clock once the framework is stopped: NetworkTimeUpdateService
+# lives in system_server. A device with no battery-backed RTC boots in 1970, and
+# every HTTPS request then fails with "certificate is not yet valid" -- which is
+# what the rootfs download and apt both do. Read the Date header over plain HTTP,
+# which needs no clock, and set the system time from it.
+set_clock() {
+    [ "$(date +%Y)" -ge 2020 ] && return 0
+    i=0
+    while [ "$i" -lt 5 ]; do
+        hdr=$(curl -sI --max-time 10 \
+              http://connectivitycheck.gstatic.com/generate_204 2>/dev/null \
+              | tr -d '\r' | sed -n 's/^[Dd]ate: *//p' | head -1)
+        [ -n "$hdr" ] && break
+        sleep 2
+        i=$((i + 1))
+    done
+    [ -n "$hdr" ] || { echo "wifi: could not read the time" >&2; return 1; }
+    set -- $hdr
+    case "$3" in
+        Jan) m=01 ;; Feb) m=02 ;; Mar) m=03 ;; Apr) m=04 ;;
+        May) m=05 ;; Jun) m=06 ;; Jul) m=07 ;; Aug) m=08 ;;
+        Sep) m=09 ;; Oct) m=10 ;; Nov) m=11 ;; Dec) m=12 ;;
+        *) echo "wifi: unparsable date '$hdr'" >&2; return 1 ;;
+    esac
+    # toybox date's default SET format is MMDDhhmmCCYY.ss, which needs no
+    # strptime support. -D is the fallback for builds that parse it.
+    hm=${5%:*}
+    date -u "$m$2${hm%:*}${hm#*:}$4.00" 2>/dev/null \
+        || date -u -D '%Y-%m-%d %H:%M:%S' "$4-$m-$2 $5" 2>/dev/null
+    [ "$(date +%Y)" -ge 2020 ] || echo "wifi: could not set the clock" >&2
 }
 
 associate() {
@@ -174,6 +210,7 @@ case "$1" in
             echo "wifi: no IP, check the password" >&2
             exit 1
         }
+        set_clock
         echo "connected to $2"
         echo "ip $addr"
         ;;
@@ -190,6 +227,7 @@ case "$1" in
             echo "wifi: no IP on $IFACE" >&2
             exit 1
         }
+        set_clock
         echo "reconnected to $ssid"
         echo "ip $addr"
         ;;
