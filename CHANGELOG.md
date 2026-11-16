@@ -64,6 +64,9 @@
 | 58 | v22 | 7c7f3d6 | [v22] santoni: wait for the chroot to resolve before apt runs (#58) |
 | 59 | v22 | 7a2be04 | [v22] santoni: run apt download methods as root in the chroot (#59) |
 | 60 | v22 | - | [v22] santoni: stop the chroot login from printing unknown group IDs (#60) |
+| 61 | v23 | bf851d2 | [v23] santoni: strip every remaining UI APK from the image (#61) |
+| 62 | v23 | b10ec8d | [v23] santoni: busybox udhcpc replaces the framework Wi-Fi path (#62) |
+| 63 | v23 | 07903cf | [v23] santoni: stop the graphics stack and Zygote at boot (#63) |
 
 ## Releases
 
@@ -1205,7 +1208,117 @@ own `/etc/group`.
 silence it without reflashing with `touch /root/.hushlogin`, which makes
 `/etc/bash.bashrc` skip the sudo hint block entirely.
 
+### #61 — Strip every remaining UI APK from the image
+
+**Problem**
+The first pass only overrode `SystemUI`, `Launcher3`, `Launcher3QuickStep`,
+`GCam` and `XiaomiAddon`. A scan of `out/target/product/santoni` after the v22
+build still found 16 UI APKs installed: `Settings`, `SettingsIntelligence`,
+`DocumentsUI`, `FMRadio`, `MatLog`, `Calendar`, `DeskClock`, `ExactCalculator`,
+`Gallery2`, `LatinIME`, `messaging`, `Contacts`, `Dialer`, `WallpaperCropper`,
+`WallpaperPicker2` and `LiveWallpapersPicker`. The same scan turned up the rest
+of the UI the first pass never looked at: `Aperture`, `EasterEgg`,
+`WallpaperBackup`, `XiaomiParts`, `GamingMode`, `MusicFX`,
+`SoundPickerPrebuilt`, `PowerOffAlarm`, `Provision`, `OneTimeInitializer`,
+`EmergencyInfo`, `StorageManager`, `ShadyQuickStep`, `VpnDialogs` and
+`DownloadProviderUi`.
+
+**Fix**
+- `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub now lists all 37
+  names, one per line.
+- The comment in `qassa_santoni.mk` records what the list covers and what it
+  deliberately leaves alone.
+
+**Files**
+`prebuilts/Android.mk`, `qassa_santoni.mk`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+The image no longer carries an app that only exists to draw something. Core
+system packages, the providers (`SettingsProvider`, `MediaProvider`,
+`TelephonyProvider`, ...), the telephony/modem stack (`TeleService`, `Telecom`,
+`ims`, `qcrilmsgtunnel`, `Stk`, `MmsService`, `CellBroadcastReceiver`) and the
+network services (`InProcessNetworkStack`, `SoftAPManager`, `WfdService`,
+`OsuLogin`, `PlatformCaptivePortalLogin`) are untouched. A wrong name in the
+list is harmless: the override silently matches nothing.
+
+### #62 — Replace the framework Wi-Fi path with wpa_cli and busybox udhcpc
+
+**Problem**
+`cmd wifi` and `svc wifi` are both shell front-ends for `system_server`. Once
+Zygote is stopped neither exists, so `vps-setup` could not join a network and
+nothing renewed the wlan0 lease. The framework's `DhcpClient` lives in
+`system_server` as well, and the lease on this network is 7200 s, so the address
+would have expired two hours after boot.
+
+**Fix**
+- `busybox/busybox`: static aarch64 BusyBox 1.37.0 (Alpine `busybox-static`,
+  musl, sha256 `a6bb1e6e349cbdfa690a78cd0017413c5446bdae02ee003ceb682d4ae1a004ff`),
+  installed to `/system/bin/busybox`. It supplies `udhcpc` and `wget`.
+- `wifi/udhcpc.script`: the lease hook. It sets the address with busybox
+  `ifconfig`, which takes the dotted netmask udhcpc hands over, replaces the
+  default route, and rewrites the chroot's `resolv.conf` from the lease. It
+  never flushes the address, so a failed renewal leaves the device reachable.
+- `wifi/wifi.sh`: rewritten on top of `/vendor/bin/wpa_cli`. `connect` saves the
+  credentials to `/data/vps_wifi.conf` (0600) because the supplicant runs
+  without `-c` and has no config file to save into; `reconnect` replays that
+  file; `dhcp` starts the udhcpc daemon. `scan`, `disconnect` and `status` no
+  longer need the `WifiShellCommand` backports.
+- `vps-setup` calls `wifi connect` instead of `svc wifi enable` plus
+  `cmd wifi connect-network`, and installs `/data/ubuntu/usr/local/bin/wifi`,
+  which chroots back into Android's root so the VPS can rejoin a network
+  without adb.
+- `wifi/resolv.conf` is copied to `/system/etc/resolv.conf`. busybox `wget` and
+  `nslookup` read that file and Android has none, because bionic asks netd.
+  `curl` keeps using netd.
+
+**Files**
+`busybox/Android.mk`, `busybox/busybox`, `wifi/Android.mk`, `wifi/wifi.sh`,
+`wifi/udhcpc.script`, `wifi/resolv.conf`, `vps-setup/vps-setup.sh`,
+`qassa_santoni.mk`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+Wi-Fi no longer depends on the framework. Verified on the device: the aarch64
+binary runs, and `udhcpc -i wlan0` obtained `192.168.110.171` from
+`192.168.110.1` with a 7200 s lease. `wpa_cli` is not in the image yet — it is
+added to `PRODUCT_PACKAGES` and needs the next build.
+
+### #63 — Stop the graphics stack and Zygote at boot
+
+**Problem**
+The build was headless only in the sense that the UI APKs were gone.
+`surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote` and `zygote_secondary` still
+ran, holding roughly 300 MB of RAM the chroot could use.
+
+**Fix**
+- `init.ubuntu.sh` stops `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote` and
+  `zygote_secondary`, then writes 0 to
+  `/sys/class/leds/lcd-backlight/brightness`. SurfaceFlinger goes first because
+  its service definition carries `onrestart restart zygote`.
+- The Wi-Fi section runs after the stop, not before. `wificond`'s
+  `ClientInterfaceImpl` destructor calls `SetUpState(false)` when its client
+  dies, which takes wlan0 down, so the interface is brought back up and the
+  saved network re-selected afterwards. Connecting before the stop would be
+  undone by `ClientModeImpl` anyway.
+- The chroot's `resolv.conf` is only built from `dumpsys` when udhcpc's hook did
+  not write one.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `CHANGELOG.md`, `README.md`
+
+**Impact**
+The device boots with no display server and no Java runtime, and the chroot gets
+the RAM back. Not yet verified on hardware: the stop sequence needs the next
+build, and it cannot be tested over SSH because it is the link being torn down.
+
 ## Key Changes by Version
+
+### v23
+- **True headless** — `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote` and
+  `zygote_secondary` are stopped at boot, backlight off
+- **Every UI APK overridden** — 37 names in `LOCAL_OVERRIDES_PACKAGES`
+- **Wi-Fi without the framework** — `wpa_cli` + busybox `udhcpc`, credentials in
+  `/data/vps_wifi.conf`, `wifi` wrapper inside the chroot
+- **busybox** — static aarch64 1.37.0 for `udhcpc` and `wget`
 
 ### v20
 - **Spectrum kernel profiles** added to XiaomiAddon (QS tile + Settings dropdown)

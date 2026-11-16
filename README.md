@@ -212,6 +212,7 @@ grep -i "error\|fail" /tmp/build.log  # check errors
 |-----|------|-------------|
 | GCam | `GCam/Camera.apk` | Google Camera |
 | XiaomiAddon | `XiaomiAddon/` | KCal display, USB Fast Charge, QS tiles |
+| BusyBox | `busybox/busybox` | static aarch64 1.37.0 — `udhcpc` and `wget` |
 
 ### Device Features
 - ADB enabled by default (headless/automation access)
@@ -258,7 +259,9 @@ network from then on.
 | Change | Where |
 |---|---|
 | `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
-| `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| 37 UI APKs dropped, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME` | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote`, `zygote_secondary` stopped at boot, backlight 0 | `rootdir/init.ubuntu.sh` |
+| Wi-Fi through `wpa_cli` + busybox `udhcpc`, no `cmd wifi` / `svc wifi` | `wifi/wifi.sh`, `wifi/udhcpc.script` |
 | `service surfaceflinger` kept enabled | `rootdir/init.target.rc` |
 | `service bootanim` kept enabled, `debug.sf.nobootanimation=1` | `rootdir/init.target.rc`, `qassa_santoni.mk` |
 | ADB over USB without the RSA prompt, ADB over Wi-Fi on 5555 | `qassa_santoni.mk` (`PRODUCT_PROPERTY_OVERRIDES`) |
@@ -292,6 +295,14 @@ The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
 in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
 overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
 never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
+
+The list holds 37 names: every APK in the image that only exists to draw
+something. It was built by scanning `out/target/product/santoni` for `*.apk`
+after a full build, so it covers `system/app`, `system/priv-app`,
+`system/product/app` and `system/product/priv-app`. Core system packages, the
+providers, the telephony/modem stack and the network services are deliberately
+left in place. A name that does not match a module is harmless — the override
+silently does nothing — so the list can be extended without risk.
 
 ### ADB Access
 
@@ -448,6 +459,8 @@ prohibit-password` back.
 | Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
+| Headless | `stop surfaceflinger`, `stop vendor.hwcomposer-2-1`, `stop zygote`, `stop zygote_secondary`, then `echo 0 > /sys/class/leds/lcd-backlight/brightness` |
+| Wi-Fi | `ip link set wlan0 up`, `wifi reconnect` when `/data/vps_wifi.conf` exists, then `wifi dhcp` to start the udhcpc daemon |
 | Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
 | sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
 | SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently. `/run/sshd.pid` is removed first, because `/run` lives on `/data` and a stale PID there would name an unrelated process |
@@ -462,6 +475,16 @@ and busybox is used when the built-in mount understands neither.
 `fstab.qcom` already asks for `zramsize=2147483648`, so the ZRAM step is
 normally just a check — it exists for a device that booted with the old 1 GB
 fstab.
+
+The headless step runs before the Wi-Fi step on purpose. `wificond`'s
+`ClientInterfaceImpl` destructor calls `SetUpState(false)` when its client
+(`system_server`) dies, so stopping Zygote takes `wlan0` down; the Wi-Fi step
+brings it back up and re-selects the saved network afterwards. Joining a network
+before the stop would be undone by `ClientModeImpl`, which disconnects any
+network it does not know about.
+
+`stop` does not fire `onrestart`, so nothing restarts the four services. They
+are `class main`, and `class_start main` only runs once, at boot.
 
 init sends a service's stdout to `/dev/null`, so `adb logcat -s vps-boot` and
 `dmesg | grep vps-boot` both come back empty even when the script ran. The
@@ -502,9 +525,9 @@ is append-only and never rotated.
 
 ### Wi-Fi helper: `wifi`
 
-`cmd wifi` on Android 10 has no scan, disconnect or status, and the raw
-commands are long enough to wrap in a CMD window. `wifi` is a short front-end
-installed to `/system/bin/wifi`:
+`cmd wifi` and `svc wifi` are shell front-ends for `system_server`, and
+`system_server` is stopped at boot. `wifi` is a short front-end for
+`/vendor/bin/wpa_cli` and busybox `udhcpc`, installed to `/system/bin/wifi`:
 
 ```sh
 adb root
@@ -512,30 +535,45 @@ adb shell wifi scan
 adb shell wifi connect aeqaeqa <password>
 adb shell wifi status
 adb shell wifi disconnect
+adb shell wifi reconnect
+adb shell wifi dhcp
 adb shell wifi help
 ```
 
-`wifi scan` prints one line per network, strongest first:
+| Command | What it does |
+|---|---|
+| `scan` | `wpa_cli scan` then `scan_results`; raw `bssid / frequency / signal level / flags / ssid` lines |
+| `connect <ssid> [pw]` | brings `wlan0` up, starts `wpa_supplicant` when needed, adds the network, waits for `wpa_state=COMPLETED`, saves the credentials, starts the udhcpc daemon and prints the IP |
+| `reconnect` | the same, using `/data/vps_wifi.conf` |
+| `disconnect` | `wpa_cli disconnect`, then flushes the address |
+| `status` | `wpa_cli status` plus the IPv4 address |
+| `dhcp` | starts the udhcpc daemon when it is not already running |
 
-```
-aeqaeqa            -45 dBm  WPA2
-IndiHome-1234      -72 dBm  WPA2
-```
+All of it needs root, so run `adb root` first.
 
-`wifi connect` enables the radio, waits for `wpa_supplicant`, joins the network
-and prints the address it got. `wifi status` prints the ssid, the signal and
-the IP. All of it needs root, so run `adb root` first.
+`wpa_supplicant` runs without `-c`, so it has no config file and `save_config`
+has nowhere to write. `connect` therefore keeps the credentials in
+`/data/vps_wifi.conf` (0600), and `init.ubuntu.sh` replays them on every boot.
 
-The scan, disconnect and status commands come from
-[patches/apply-wifi-scan.py](patches/apply-wifi-scan.py), which adds them to
-`WifiShellCommand` the same way `connect-network` was added.
+The lease is renewed by `busybox udhcpc` in daemon mode, with
+`/system/bin/udhcpc.script` as the hook. The hook never flushes the address, so
+a renewal that fails leaves the device reachable on its old address instead of
+taking it off the network.
+
+Inside the chroot the same CLI is available as `/usr/local/bin/wifi`. It chroots
+back into Android's root, so `/proc` has to be mounted — the boot script does
+that.
+
+The `WifiShellCommand` backports in `patches/` are no longer used by anything.
+They stay in the tree because they are harmless.
 
 ### Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
-| `Unknown command: connect-network` | the build predates the Android 10 backport | apply `patches/apply-wifi-connect-network.py` and rebuild |
+| `wifi: add_network failed` | `wpa_supplicant` is not running, or `/vendor/bin/wpa_cli` is missing from the image | `adb shell getprop init.svc.wpa_supplicant` must print `running`; `wpa_cli` needs a build that lists it in `PRODUCT_PACKAGES` |
+| `wifi: no /data/vps_wifi.conf, run 'wifi connect'` | the device has never joined a network, so the boot script has nothing to replay | `adb shell wifi connect <ssid> <password>` once; the file is written from then on |
 | `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
 | `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
@@ -677,6 +715,9 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 | # | Version | Hash | Change |
 |---|---------|------|--------|
+| 63 | v23 | 07903cf | Stop the graphics stack and Zygote at boot |
+| 62 | v23 | b10ec8d | busybox udhcpc replaces the framework Wi-Fi path |
+| 61 | v23 | bf851d2 | Strip every remaining UI APK from the image |
 | 42 | v22 | - | Fix 5 documentation bugs and script step labels |
 | 41 | v22 | e4e1218 | Re-enable the ADB over Wi-Fi password gate |
 | 40 | v22 | de32ed6 | sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp |
