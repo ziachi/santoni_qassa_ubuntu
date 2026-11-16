@@ -1123,6 +1123,31 @@ actually answers on this network.
 `apt` inside the chroot resolves again, so `openssh-server` installs and sshd
 can start on boot.
 
+### #58 — Wait for the chroot to resolve before apt runs
+
+**Problem**
+`vps-setup` reached step 7 and `apt-get update` failed with `Temporary failure
+resolving 'ports.ubuntu.com'` on all four suites, so `openssh-server` was never
+installed. Testing each resolver from inside the chroot afterwards showed
+`192.168.110.1`, `8.8.8.8`, `223.5.5.5` and `240e:37a:4ab:1::1` all resolving,
+so the resolver list was not the problem: the chroot had no working network at
+the moment apt ran. The link is re-associated in step 1 and netd can flush the
+main table when it re-validates the network, which removes the default route
+step 5 added. apt has no retry of its own, so it failed once and the script
+moved on.
+
+**Fix**
+- Before apt runs, the default route is re-added if it is missing and the
+  chroot is polled with `getent hosts` until it resolves, up to 60 seconds.
+- The comments claiming the gateway does not answer DNS are gone; it does.
+
+**Files**
+`vps-setup/vps-setup.sh`, `rootdir/init.ubuntu.sh`, `CHANGELOG.md`
+
+**Impact**
+`openssh-server` installs on the first run instead of needing a manual
+`apt-get install` afterwards.
+
 ## Key Changes by Version
 
 ### v20

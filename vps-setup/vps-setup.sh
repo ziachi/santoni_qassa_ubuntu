@@ -154,13 +154,12 @@ if [ -n "$GW" ] && ! ip route show 2>/dev/null | grep -q '^default via'; then
         && echo "      default route -> $GW"
 fi
 
-# Android resolves through netd and has no resolv.conf to copy. The resolver
-# the framework actually uses is the only one known to work on this network,
-# so read it out of dumpsys first. The gateway is not a reliable fallback: on
-# the santoni test network it routes but does not answer DNS.
-# Keep every address netd lists, IPv6 included. Filtering down to IPv4 drops
-# the resolver that actually answers here: netd lists the IPv6 resolver first
-# and the IPv4 gateway second, and the gateway routes but does not answer DNS.
+# Android resolves through netd and has no resolv.conf to copy, so read the
+# resolvers out of dumpsys first and fall back to the gateway only when that
+# yields nothing.
+# Keep every address netd lists, IPv6 included, in netd's order. Filtering
+# down to IPv4 silently drops the IPv6 resolver, and glibc tries the entries
+# in sequence, so the order netd chose is the one to keep.
 DNS_LIST=$(dumpsys connectivity 2>/dev/null \
     | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
     | grep -v '^ *$' | head -1 \
@@ -231,6 +230,26 @@ chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 # chroot. Package postinst scripts call mktemp, so without overriding it
 # openssh-server fails to configure with exit status 1.
 CHROOT_ENV='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; export HOME=/root; export TMPDIR=/tmp; export DEBIAN_FRONTEND=noninteractive'
+
+# The link was re-associated in step 1, and netd can flush the main table when
+# it re-validates the network, which removes the default route step 5 added.
+# apt has no retry of its own, so re-add the route and wait until the chroot
+# can actually resolve before handing it over.
+if [ -x "$UBUNTU_ROOT/usr/bin/getent" ]; then
+    _net_try=0
+    while [ "$_net_try" -lt 12 ]; do
+        GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
+        if [ -n "$GW" ] && ! ip route show 2>/dev/null | grep -q '^default via'; then
+            ip route add default via "$GW" dev wlan0 2>/dev/null
+        fi
+        if chroot "$UBUNTU_ROOT" /usr/bin/getent hosts ports.ubuntu.com >/dev/null 2>&1; then
+            echo "      DNS ok"
+            break
+        fi
+        _net_try=$((_net_try + 1))
+        sleep 5
+    done
+fi
 
 if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y openssh-server"; then
     echo "      apt finished"

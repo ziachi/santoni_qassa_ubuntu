@@ -163,10 +163,9 @@ chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
 # The chroot keeps its own resolv.conf and the gateway changes when the
 # device moves networks, so refresh it from the current default route.
-# Android resolves through netd and has no resolv.conf to copy. The resolver
-# the framework actually uses is the only one known to work on this network,
-# so read it out of dumpsys first. The gateway is not a reliable fallback: on
-# the santoni test network it routes but does not answer DNS.
+# Android resolves through netd and has no resolv.conf to copy, so read the
+# resolvers out of dumpsys first and fall back to the gateway only when that
+# yields nothing.
 # Android routes unmarked traffic through the main table, which holds only the
 # local subnet plus an `unreachable default`. Processes inside the chroot are
 # unmarked, so without a real default route in main every outbound packet dies
@@ -187,9 +186,9 @@ while [ $_route_try -lt 30 ]; do
     sleep 2
 done
 
-# Keep every address netd lists, IPv6 included. Filtering down to IPv4 drops
-# the resolver that actually answers here: netd lists the IPv6 resolver first
-# and the IPv4 gateway second, and the gateway routes but does not answer DNS.
+# Keep every address netd lists, IPv6 included, in netd's order. Filtering
+# down to IPv4 silently drops the IPv6 resolver, and glibc tries the entries
+# in sequence, so the order netd chose is the one to keep.
 DNS_LIST=$(dumpsys connectivity 2>/dev/null \
     | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
     | grep -v '^ *$' | head -1 \
