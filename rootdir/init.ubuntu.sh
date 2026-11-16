@@ -329,17 +329,25 @@ log "net tuning: bcast-echo=$(cat /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 # "localhost" and every .local lookup gets the wrong answer.
 if [ -z "$(getprop net.hostname 2>/dev/null)" ]; then
     setprop net.hostname santoni 2>/dev/null && log "net.hostname -> santoni"
+    # mdnsd reads the name once when it starts, and it is already running by
+    # the time this script gets here, so the property alone would leave
+    # santoni.local stale until the next reboot.
+    stop mdnsd 2>/dev/null
+    start mdnsd 2>/dev/null
+    log "mdnsd restarted for the new hostname"
 fi
 if [ -f "$UBUNTU_ROOT/etc/hostname" ] && grep -q '^localhost' "$UBUNTU_ROOT/etc/hostname" 2>/dev/null; then
     echo santoni > "$UBUNTU_ROOT/etc/hostname"
     log "chroot hostname -> santoni"
 fi
 
-# aid_net_raw (3004) and aid_net_admin (3005) are what Android's paranoid
-# network check looks for before it allows a raw socket or a multicast group
-# join. Only aid_inet is in the chroot's group file, so a non-root process
-# there cannot open a raw socket even though the kernel would allow it.
-for _g in "aid_net_raw:3004" "aid_net_admin:3005"; do
+# aid_inet (3003), aid_net_raw (3004) and aid_net_admin (3005) are what
+# Android's paranoid network check looks for before it allows an AF_INET
+# socket, a raw socket or a multicast group join. Nothing in vps-setup creates
+# them, so a fresh install has none of the three and a non-root process there
+# cannot open a socket at all. root bypasses the check with CAP_NET_RAW, which
+# is why the gap only shows up once a second user is added.
+for _g in "aid_inet:3003" "aid_net_raw:3004" "aid_net_admin:3005"; do
     _name=${_g%%:*}
     _gid=${_g##*:}
     if [ -f "$UBUNTU_ROOT/etc/group" ] && ! grep -q "^$_name:" "$UBUNTU_ROOT/etc/group"; then
