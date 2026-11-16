@@ -106,5 +106,11 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     wpa_cli
 
+# curl: vps-setup downloads the Ubuntu rootfs on the device. The in-tree
+# external/curl module is used instead of a prebuilt static blob, so the
+# binary is built from source and links the system libssl/libcrypto/libz.
+PRODUCT_PACKAGES += \
+    curl
+
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

@@ -19,6 +19,7 @@ TARBALL=/data/local/tmp/ubuntu-base.tar.gz
 PRIMARY_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz
 FALLBACK_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04.5/release/ubuntu-base-22.04.5-base-arm64.tar.gz
 WPA_SOCKETS=/data/vendor/wifi/wpa/sockets
+CACERT_DIR=/system/etc/security/cacerts
 
 die() {
     echo "vps-setup: $*" >&2
@@ -101,22 +102,29 @@ echo "      wlan0 = $ip_addr"
 # ------------------------------------------------------------- 2. Download
 echo "[3/7] Downloading the Ubuntu 22.04 arm64 base rootfs"
 
-download() {
-    url=$1
+# curl is built into the image from the in-tree external/curl module, so the
+# rootfs is fetched on the device. --capath points libcurl at the platform CA
+# store, which is an OpenSSL-style hashed directory.
+fetch() {
+    rm -f "$TARBALL"
     if command -v curl >/dev/null 2>&1; then
-        curl -L --fail --retry 2 -o "$TARBALL" "$url"
+        if [ -d "$CACERT_DIR" ]; then
+            curl -fsSL --capath "$CACERT_DIR" -o "$TARBALL" "$1"
+        else
+            curl -fsSL -o "$TARBALL" "$1"
+        fi
     elif command -v wget >/dev/null 2>&1; then
-        wget -O "$TARBALL" "$url"
+        wget -q -O "$TARBALL" "$1"
     elif toybox wget --help >/dev/null 2>&1; then
-        toybox wget -O "$TARBALL" "$url"
+        toybox wget -q -O "$TARBALL" "$1"
     else
         return 127
     fi
 }
 
-if download "$PRIMARY_URL"; then
+if fetch "$PRIMARY_URL"; then
     :
-elif download "$FALLBACK_URL"; then
+elif fetch "$FALLBACK_URL"; then
     :
 else
     echo
@@ -130,6 +138,7 @@ else
 fi
 
 [ -s "$TARBALL" ] || die "download produced an empty file"
+echo "      $(du -h "$TARBALL" | cut -f1) in $TARBALL"
 
 # -------------------------------------------------------------- 3. Extract
 echo "[4/7] Extracting into $UBUNTU_ROOT"
