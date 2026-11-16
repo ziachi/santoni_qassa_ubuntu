@@ -405,9 +405,10 @@ It does seven things:
    `chmod 600` and `chown 0:0`, and print the value
 7. mount `/dev`, `/proc` and `/sys` inside the chroot, write a `resolv.conf`,
    then `apt update && apt install -y openssh-server` and unmount again
-8. generate a 16-character root password, `chpasswd` it into the chroot,
-   save it to `/data/ubuntu_root_pass` (0600 root:root) and set
-   `PermitRootLogin yes` in `sshd_config`
+8. set the root password to `santoniadmin` (or `$UBUNTU_ROOT_PASS`), `chpasswd`
+   it into the chroot, verify the hash landed in `/etc/shadow`, save it to
+   `/data/ubuntu_root_pass` (0600 root:root) and set `PermitRootLogin yes` in
+   `sshd_config`
 
 `curl` is built into the image from the in-tree `external/curl` module, so the
 download normally happens on the device. If it is missing (an older build), the
@@ -420,14 +421,14 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
 After that, `adb shell` lands in Ubuntu as root with `openssh-server`
-installed, a random root password set, and `PermitRootLogin yes` written into
+installed, the root password set, and `PermitRootLogin yes` written into
 `sshd_config`. The script prints both passwords at the end:
 
 ```
   Passwords, also stored on the device (mode 600 root:root):
     adb over Wi-Fi : santoniadmin
                      /data/adb_wifi_pass
-    ssh root       : 3f9c1a7e5b2d8046
+    ssh root       : santoniadmin
                      /data/ubuntu_root_pass
 ```
 
@@ -449,7 +450,7 @@ prohibit-password` back.
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
 | Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
 | sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
-| SSH | `chroot /data/ubuntu /usr/sbin/service ssh start` |
+| SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently |
 
 `/dev` is rbind-mounted rather than bind-mounted because ueventd keeps creating
 nodes after boot; a plain bind would freeze the chroot's view at the moment of
@@ -534,7 +535,7 @@ The scan, disconnect and status commands come from
 | `vps-setup` prints `/bin/sh: 1: apt-get: not found` | the chroot inherited Android's `PATH`, which has no `/usr/bin` | fixed in #52; on an older build run `chroot /data/ubuntu /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; apt-get update && apt-get install -y openssh-server'` |
 | `bash: groups: command not found` inside the chroot | `/etc/profile` in ubuntu-base sets `PS1` but not `PATH`, so the chroot keeps Android's `PATH` | fixed in #53; on an older build run `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |
 | `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot is unmarked, so it uses the main routing table, which on Android holds only the local subnet plus an `unreachable default` | fixed in #53; `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main table. To repair a running device: `ip route add default via <gateway> dev wlan0` |
-| SSH says `Permission denied (publickey)` | `PermitRootLogin` is still `prohibit-password`, or the root password was never set | over USB: `adb shell cat /data/ubuntu_root_pass`, then `adb shell "chroot /data/ubuntu passwd root"` |
+| SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin | /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
 | `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
