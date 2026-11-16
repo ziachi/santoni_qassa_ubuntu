@@ -68,6 +68,7 @@
 | 62 | v23 | b10ec8d | [v23] santoni: busybox udhcpc replaces the framework Wi-Fi path (#62) |
 | 63 | v23 | 07903cf | [v23] santoni: stop the graphics stack and Zygote at boot (#63) |
 | 64 | v23 | 027fe83 | [v23] santoni: bring Wi-Fi up in the background after sshd (#64) |
+| 65 | v24 | fd4c91c | [v24] santoni: rebrand to qassa_ubuntu22-ziachi-santoni (#65) |
 
 ## Releases
 
