@@ -117,7 +117,15 @@ done
 # ------------------------------------------------------------- 4. Network
 echo "[5/7] Writing resolv.conf and apt sources"
 
+# Android resolves through netd and has no resolv.conf to copy, so the
+# chroot needs its own. The router is the only DNS server guaranteed to be
+# reachable; the public ones are a fallback because many networks drop them.
+DNS=$(getprop net.dns1 2>/dev/null)
+[ -n "$DNS" ] || DNS=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+[ -n "$DNS" ] || DNS=192.168.1.1
+
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
+nameserver $DNS
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
@@ -161,6 +169,7 @@ mount -t sysfs sysfs "$UBUNTU_ROOT/sys" 2>/dev/null
 chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF
+nameserver $DNS
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF

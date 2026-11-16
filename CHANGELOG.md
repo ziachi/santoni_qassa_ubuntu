@@ -56,6 +56,7 @@
 | 50 | v22 | - | [v22] santoni: wifi helper and scan backport (#50) |
 | 51 | v22 | - | [v22] santoni: set and print both passwords (#51) |
 | 52 | v22 | - | [v22] santoni: fix apt-get PATH inside the chroot (#52) |
+| 53 | v22 | - | [v22] santoni: give the chroot a working PATH and DNS (#53) |
 
 ## Releases
 
@@ -950,6 +951,36 @@ installed, leaving the device reachable only over adb.
 **Impact**
 `openssh-server` installs on the first run. Devices already set up can be
 repaired without reflashing by running the chroot `apt-get` command by hand.
+
+### #53 — Give the chroot a working PATH and DNS
+
+**Problem**
+Two follow-on failures from #52, both seen on the first real device run:
+
+1. `bash: groups: command not found` after `adb shell`. `/etc/profile` in
+   `ubuntu-base` sets `PS1` and sources `profile.d`, but never sets `PATH`, so
+   `bash -l` kept Android's `PATH` and lost `/usr/bin`.
+2. `apt-get update` reached the network but every index failed with
+   `Temporary failure resolving 'ports.ubuntu.com'`. `resolv.conf` was written
+   with `8.8.8.8` and `1.1.1.1`, which this network drops.
+
+**Fix**
+- `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
+  `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
+  `/etc/profile`.
+- `vps-setup` writes `resolv.conf` from `net.dns1`, falling back to the default
+  route's gateway, and only then to a public resolver.
+- `init.ubuntu.sh` refreshes `resolv.conf` on every boot so a network change
+  does not leave the chroot with a dead resolver.
+
+**Files**
+`ubuntu-enter/ubuntu-enter.sh`, `vps-setup/vps-setup.sh`,
+`rootdir/init.ubuntu.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+`adb shell` lands in a usable shell and `apt-get install` works on the first
+run. Devices already set up can be repaired without reflashing by exporting
+`PATH` and pointing `/etc/resolv.conf` at the router.
 
 ## Key Changes by Version
 

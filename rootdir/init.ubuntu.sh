@@ -150,6 +150,16 @@ mkdir -p "$UBUNTU_ROOT/tmp" "$UBUNTU_ROOT/run/sshd"
 chmod 1777 "$UBUNTU_ROOT/tmp" 2>/dev/null
 chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 
+# The chroot keeps its own resolv.conf and the gateway changes when the
+# device moves networks, so refresh it from the current default route.
+DNS=$(getprop net.dns1 2>/dev/null)
+[ -n "$DNS" ] || DNS=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -n "$DNS" ]; then
+    printf 'nameserver %s\nnameserver 8.8.8.8\nnameserver 1.1.1.1\n' "$DNS" \
+        > "$UBUNTU_ROOT/etc/resolv.conf"
+    log "resolv.conf -> $DNS"
+fi
+
 if [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     # Same PATH problem as vps-setup: the chroot inherits Android's PATH,
     # and the init.d script behind `service` needs /usr/bin.

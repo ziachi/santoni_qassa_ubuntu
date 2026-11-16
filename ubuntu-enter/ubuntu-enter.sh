@@ -82,7 +82,14 @@ enter_ubuntu() {
     for d in dev dev/pts proc sys; do
         bind_mount "/$d" "$UBUNTU_ROOT/$d"
     done
-    exec chroot "$UBUNTU_ROOT" /bin/bash -l
+    # /etc/profile in ubuntu-base sets PS1 but never PATH, so a plain
+    # `bash -l` keeps Android's PATH and loses /usr/bin. Build the
+    # environment here instead of relying on the rootfs.
+    exec chroot "$UBUNTU_ROOT" /usr/bin/env -i \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        HOME=/root USER=root LOGNAME=root SHELL=/bin/bash \
+        TERM="${TERM:-xterm}" \
+        /bin/bash -l
 }
 
 # adbd runs "<shell> -c <command>" for "adb shell <command>". Authenticate
