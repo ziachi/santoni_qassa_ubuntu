@@ -92,19 +92,39 @@ fetch() {
 # user to push one, so the download must not delete it first.
 if [ -s "$TARBALL" ]; then
     echo "      using the tarball already at $TARBALL"
-elif fetch "$PRIMARY_URL"; then
-    :
-elif fetch "$FALLBACK_URL"; then
-    :
 else
-    echo
-    echo "vps-setup: could not download the rootfs." >&2
-    echo "  'Could not resolve host' means DNS on the device is broken, not" >&2
-    echo "  the mirror. Check with: ping -c1 cdimage.ubuntu.com" >&2
-    echo "  Or push the rootfs from the PC:" >&2
-    echo "    adb push ubuntu-base-22.04-base-arm64.tar.gz $TARBALL" >&2
-    echo "    adb shell vps-setup $SSID <password>" >&2
-    exit 1
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1 \
+            && ! toybox wget --help >/dev/null 2>&1; then
+        echo "vps-setup: no downloader on the device (no curl, wget, or toybox wget)." >&2
+        echo "  Push the rootfs from the PC:" >&2
+        echo "    adb push ubuntu-base-22.04-base-arm64.tar.gz $TARBALL" >&2
+        echo "    adb shell vps-setup $SSID <password>" >&2
+        exit 1
+    fi
+
+    # An IP on wlan0 does not mean netd can resolve yet: right after DHCP the
+    # network reports AVAILABLE with an empty DnsAddresses list, and curl fails
+    # instantly with "Could not resolve host" if it runs inside that window.
+    # Retry rather than giving up on the first attempt.
+    attempt=0
+    while :; do
+        attempt=$((attempt + 1))
+        if fetch "$PRIMARY_URL" || fetch "$FALLBACK_URL"; then
+            break
+        fi
+        if [ "$attempt" -ge 6 ]; then
+            echo
+            echo "vps-setup: could not download the rootfs after $attempt attempts." >&2
+            echo "  'Could not resolve host' means DNS on the device is broken, not" >&2
+            echo "  the mirror. Check with: ping -c1 cdimage.ubuntu.com" >&2
+            echo "  Or push the rootfs from the PC:" >&2
+            echo "    adb push ubuntu-base-22.04-base-arm64.tar.gz $TARBALL" >&2
+            echo "    adb shell vps-setup $SSID <password>" >&2
+            exit 1
+        fi
+        echo "      download failed, retrying in 5s ($attempt/6)"
+        sleep 5
+    done
 fi
 
 [ -s "$TARBALL" ] || die "download produced an empty file"

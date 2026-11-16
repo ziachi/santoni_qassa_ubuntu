@@ -1073,6 +1073,32 @@ PC, `adb push` it, re-run `vps-setup`. Step 7 is unaffected because apt inside
 the chroot resolves through the `resolv.conf` the script writes, not through
 netd.
 
+### #56 — Retry the rootfs download while netd has no DNS yet
+
+**Problem**
+On a clean flash, `vps-setup` failed at step 3 with `curl: (6) Could not resolve
+host: cdimage.ubuntu.com` on both the primary and the fallback URL, while
+`ping 8.8.8.8` worked. Minutes later the same `curl` command returned
+`HTTP/1.1 200 OK` and `ping cdimage.ubuntu.com` resolved. The network was fine;
+the script was too early. `dumpsys connectivity` shows the window: right after
+DHCP the network reports `state=AVAILABLE` with `DnsAddresses: [ ]`, and only
+later gets `[ /240e:37a:4ab:1::1,/192.168.110.1 ]`. `vps-setup` waited for an IP
+on wlan0 and then downloaded immediately, so curl ran inside that window and
+failed instantly.
+
+**Fix**
+- The download is retried up to six times, five seconds apart, before the
+  script gives up.
+- A missing downloader is detected once, up front, and reported as such instead
+  of being retried.
+
+**Files**
+`vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+A clean-flash setup no longer fails because it raced the network's DNS
+configuration. The retry also covers a flaky link during the 27 MB download.
+
 ## Key Changes by Version
 
 ### v20
