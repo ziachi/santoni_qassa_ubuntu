@@ -217,21 +217,23 @@ fi
 # sshd on Ubuntu 22.04 defaults to PermitRootLogin prohibit-password, and the
 # base rootfs ships root with no password at all. Without both a password and
 # that setting the only way in is adb, which defeats the point of a VPS.
+# A fixed default keeps the first login predictable; UBUNTU_ROOT_PASS overrides
+# it. The file is still written so the password is discoverable over adb.
 ROOT_PASS_FILE=/data/ubuntu_root_pass
-if [ -s "$ROOT_PASS_FILE" ]; then
-    root_pass=$(cat "$ROOT_PASS_FILE" 2>/dev/null)
-else
-    root_pass=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | head -c 16)
-    echo "$root_pass" > "$ROOT_PASS_FILE" || die "cannot write $ROOT_PASS_FILE"
-    chmod 600 "$ROOT_PASS_FILE" 2>/dev/null
-    chown 0:0 "$ROOT_PASS_FILE" 2>/dev/null
-fi
+root_pass=${UBUNTU_ROOT_PASS:-santoniadmin}
+echo "$root_pass" > "$ROOT_PASS_FILE" || die "cannot write $ROOT_PASS_FILE"
+chmod 600 "$ROOT_PASS_FILE" 2>/dev/null
+chown 0:0 "$ROOT_PASS_FILE" 2>/dev/null
 
 if [ -n "$root_pass" ]; then
-    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" /usr/sbin/chpasswd 2>/dev/null; then
+    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" /usr/sbin/chpasswd; then
         echo "      root password set"
     else
         echo "      could not set the root password"
+    fi
+    # chpasswd can exit 0 while leaving the hash untouched, so check the field.
+    if chroot "$UBUNTU_ROOT" /bin/sh -c 'grep -q "^root:[!*]" /etc/shadow'; then
+        echo "      WARNING: root has no password hash, login will fail"
     fi
     SSHD_CONF="$UBUNTU_ROOT/etc/ssh/sshd_config"
     if [ -f "$SSHD_CONF" ]; then
@@ -251,6 +253,7 @@ umount "$UBUNTU_ROOT/dev" 2>/dev/null
 
 echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"
+echo "SSH: ssh root@<phone-ip>   password: $root_pass"
 echo "  Wi-Fi IP : $ip_addr"
 echo "  Enter    : adb shell"
 echo "  SSH      : ssh root@$ip_addr"

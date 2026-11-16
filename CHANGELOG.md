@@ -968,6 +968,11 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
+- `vps-setup` now sets the root password to a fixed `santoniadmin` by default
+  (`UBUNTU_ROOT_PASS` overrides it) instead of a random 16-character string,
+  and verifies the hash actually landed in `/etc/shadow`. The old code hid
+  `chpasswd` errors behind `2>/dev/null`, so `/data/ubuntu_root_pass` could
+  hold a password that was never applied and every SSH login was rejected.
 - `vps-setup` and `init.ubuntu.sh` export `TMPDIR=/tmp` inside the chroot.
   `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist there, so
   `mktemp` failed and the `openssh-server` postinst aborted with exit status 1
