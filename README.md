@@ -244,8 +244,8 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 adb connect 192.168.1.50:5555
 echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
 
-# 4. inside Ubuntu — give root a password (vps-setup already installed sshd)
-passwd root                       # sshd refuses an empty root password
+# 4. vps-setup already set a random root password and printed it
+#    (it is also in /data/ubuntu_root_pass if you missed it)
 
 # 5. from any machine on the LAN
 ssh root@192.168.1.50
@@ -402,9 +402,12 @@ It does seven things:
 5. write `/etc/resolv.conf` (8.8.8.8, 1.1.1.1) and an `apt` `sources.list` for
    `ports.ubuntu.com`
 6. create `/data/adb_wifi_pass` with `santoniadmin` if it is missing, then
-   `chmod 600` and `chown 0:0`
+   `chmod 600` and `chown 0:0`, and print the value
 7. mount `/dev`, `/proc` and `/sys` inside the chroot, write a `resolv.conf`,
    then `apt update && apt install -y openssh-server` and unmount again
+8. generate a 16-character root password, `chpasswd` it into the chroot,
+   save it to `/data/ubuntu_root_pass` (0600 root:root) and set
+   `PermitRootLogin yes` in `sshd_config`
 
 `curl` is built into the image from the in-tree `external/curl` module, so the
 download normally happens on the device. If it is missing (an older build), the
@@ -416,13 +419,23 @@ adb push ubuntu-base-22.04-base-arm64.tar.gz /data/local/tmp/
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-After that, `adb shell` lands in Ubuntu as root with `openssh-server` already
-installed. The only thing left is a root password, because `sshd` refuses an
-empty one:
+After that, `adb shell` lands in Ubuntu as root with `openssh-server`
+installed, a random root password set, and `PermitRootLogin yes` written into
+`sshd_config`. The script prints both passwords at the end:
 
-```bash
-passwd root
 ```
+  Passwords, also stored on the device (mode 600 root:root):
+    adb over Wi-Fi : santoniadmin
+                     /data/adb_wifi_pass
+    ssh root       : 3f9c1a7e5b2d8046
+                     /data/ubuntu_root_pass
+```
+
+`PermitRootLogin yes` is required because Ubuntu 22.04 defaults to
+`prohibit-password`, which refuses root password logins even after
+`passwd root`. To use a key instead, put it in
+`/data/ubuntu/root/.ssh/authorized_keys` and set `PermitRootLogin
+prohibit-password` back.
 
 ### Boot behaviour
 
@@ -518,6 +531,7 @@ The scan, disconnect and status commands come from
 | `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
 | `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
+| SSH says `Permission denied (publickey)` | `PermitRootLogin` is still `prohibit-password`, or the root password was never set | over USB: `adb shell cat /data/ubuntu_root_pass`, then `adb shell "chroot /data/ubuntu passwd root"` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |

@@ -54,6 +54,7 @@
 | 48 | v22 | - | [v22] santoni: Backport cmd wifi connect-network for Android 10 (#48) |
 | 49 | v22 | - | [v22] santoni: In-tree curl, 60-column output (#49) |
 | 50 | v22 | - | [v22] santoni: wifi helper and scan backport (#50) |
+| 51 | v22 | - | [v22] santoni: set and print both passwords (#51) |
 
 ## Releases
 
@@ -899,6 +900,31 @@ The commands that did exist were also long enough to wrap in a CMD window.
 Nearby networks can be listed from the device. The Wi-Fi join path is
 unchanged: `wifi connect` calls the same `cmd wifi connect-network` that
 `vps-setup` uses.
+
+### #51 — Passwords are set and printed
+
+**Problem**
+`vps-setup` created `/data/adb_wifi_pass` but only said "wrote the default
+password", so the value was never shown. Worse, it never set a root password at
+all: the base rootfs ships root locked, and the README told you to run
+`passwd root` by hand. Even after doing that, SSH still refused root because
+Ubuntu 22.04 defaults to `PermitRootLogin prohibit-password`. The result was a
+"VPS" reachable only over adb.
+
+**Fix**
+- Step 6 now prints the ADB Wi-Fi password it seeded.
+- Step 8 generates a 16-character root password from
+  `/proc/sys/kernel/random/uuid`, `chpasswd`s it into the chroot, saves it to
+  `/data/ubuntu_root_pass` (0600 root:root) and sets `PermitRootLogin yes`.
+- The closing summary prints both passwords and where they live.
+
+**Files**
+`vps-setup/vps-setup.sh`, `README.md`, `CHANGELOG.md`
+
+**Impact**
+`ssh root@<ip>` works right after setup, with no manual step. The trade-off is
+that root password login is enabled on the LAN; use a key and revert
+`PermitRootLogin` if that is not acceptable.
 
 ## Key Changes by Version
 

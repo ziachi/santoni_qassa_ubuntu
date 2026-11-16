@@ -141,6 +141,8 @@ else
 fi
 chmod 600 "$PASS_FILE" 2>/dev/null
 chown 0:0 "$PASS_FILE" 2>/dev/null
+adb_pass=$(cat "$PASS_FILE" 2>/dev/null)
+echo "      password: ${adb_pass:-santoniadmin}"
 
 # ---------------------------------------------------- 6. openssh-server
 echo "[7/7] Installing openssh-server in the chroot"
@@ -170,6 +172,36 @@ else
     echo "      apt failed, run it by hand later"
 fi
 
+# sshd on Ubuntu 22.04 defaults to PermitRootLogin prohibit-password, and the
+# base rootfs ships root with no password at all. Without both a password and
+# that setting the only way in is adb, which defeats the point of a VPS.
+ROOT_PASS_FILE=/data/ubuntu_root_pass
+if [ -s "$ROOT_PASS_FILE" ]; then
+    root_pass=$(cat "$ROOT_PASS_FILE" 2>/dev/null)
+else
+    root_pass=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | head -c 16)
+    echo "$root_pass" > "$ROOT_PASS_FILE" || die "cannot write $ROOT_PASS_FILE"
+    chmod 600 "$ROOT_PASS_FILE" 2>/dev/null
+    chown 0:0 "$ROOT_PASS_FILE" 2>/dev/null
+fi
+
+if [ -n "$root_pass" ]; then
+    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" chpasswd 2>/dev/null; then
+        echo "      root password set"
+    else
+        echo "      could not set the root password"
+    fi
+    SSHD_CONF="$UBUNTU_ROOT/etc/ssh/sshd_config"
+    if [ -f "$SSHD_CONF" ]; then
+        if grep -q '^#*PermitRootLogin' "$SSHD_CONF" 2>/dev/null; then
+            sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' "$SSHD_CONF"
+        else
+            echo 'PermitRootLogin yes' >> "$SSHD_CONF"
+        fi
+        echo "      PermitRootLogin yes"
+    fi
+fi
+
 umount "$UBUNTU_ROOT/sys" 2>/dev/null
 umount "$UBUNTU_ROOT/proc" 2>/dev/null
 umount "$UBUNTU_ROOT/dev/pts" 2>/dev/null
@@ -179,4 +211,10 @@ echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"
 echo "  Wi-Fi IP : $ip_addr"
 echo "  Enter    : adb shell"
-echo "  SSH      : chroot $UBUNTU_ROOT passwd root"
+echo "  SSH      : ssh root@$ip_addr"
+echo
+echo "  Passwords, also stored on the device (mode 600 root:root):"
+echo "    adb over Wi-Fi : ${adb_pass:-santoniadmin}"
+echo "                     /data/adb_wifi_pass"
+echo "    ssh root       : ${root_pass:-not set}"
+echo "                     /data/ubuntu_root_pass"
