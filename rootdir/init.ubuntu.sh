@@ -153,7 +153,13 @@ chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 # The chroot keeps its own resolv.conf and the gateway changes when the
 # device moves networks, so refresh it from the current default route.
 DNS=$(getprop net.dns1 2>/dev/null)
-[ -n "$DNS" ] || DNS=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+[ -n "$DNS" ] || DNS=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -z "$DNS" ]; then
+    # Android keeps the default route in a per-network table that toybox
+    # `ip route` does not print, so derive the router from the subnet.
+    IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
+    [ -n "$IP" ] && DNS=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
 if [ -n "$DNS" ]; then
     printf 'nameserver %s\nnameserver 8.8.8.8\nnameserver 1.1.1.1\n' "$DNS" \
         > "$UBUNTU_ROOT/etc/resolv.conf"

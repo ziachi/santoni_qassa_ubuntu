@@ -533,7 +533,7 @@ The scan, disconnect and status commands come from
 | Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
 | `vps-setup` prints `/bin/sh: 1: apt-get: not found` | the chroot inherited Android's `PATH`, which has no `/usr/bin` | fixed in #52; on an older build run `chroot /data/ubuntu /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; apt-get update && apt-get install -y openssh-server'` |
 | `bash: groups: command not found` inside the chroot | `/etc/profile` in ubuntu-base sets `PS1` but not `PATH`, so the chroot keeps Android's `PATH` | fixed in #53; on an older build run `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |
-| `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot `resolv.conf` pointed at `8.8.8.8`, which many networks drop | fixed in #53; point it at the router: `echo "nameserver $(ip route \| awk '/^default/ {print $3}')" > /etc/resolv.conf` |
+| `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot `resolv.conf` pointed at `8.8.8.8`, which many networks drop | fixed in #53; point it at the router, e.g. `echo 'nameserver 192.168.110.1' > /etc/resolv.conf` |
 | SSH says `Permission denied (publickey)` | `PermitRootLogin` is still `prohibit-password`, or the root password was never set | over USB: `adb shell cat /data/ubuntu_root_pass`, then `adb shell "chroot /data/ubuntu passwd root"` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in logcat | sshd missing | `apt install -y openssh-server` inside the chroot |

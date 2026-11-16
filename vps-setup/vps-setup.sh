@@ -121,7 +121,13 @@ echo "[5/7] Writing resolv.conf and apt sources"
 # chroot needs its own. The router is the only DNS server guaranteed to be
 # reachable; the public ones are a fallback because many networks drop them.
 DNS=$(getprop net.dns1 2>/dev/null)
-[ -n "$DNS" ] || DNS=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+[ -n "$DNS" ] || DNS=$(ip route show table all 2>/dev/null | awk '/^default/ {print $3; exit}')
+if [ -z "$DNS" ]; then
+    # Android keeps the default route in a per-network table that toybox
+    # `ip route` does not print, so derive the router from the subnet.
+    IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet / {print $2; exit}' | cut -d/ -f1)
+    [ -n "$IP" ] && DNS=$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')
+fi
 [ -n "$DNS" ] || DNS=192.168.1.1
 
 cat > "$UBUNTU_ROOT/etc/resolv.conf" <<EOF

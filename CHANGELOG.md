@@ -969,7 +969,10 @@ Two follow-on failures from #52, both seen on the first real device run:
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
 - `vps-setup` writes `resolv.conf` from `net.dns1`, falling back to the default
-  route's gateway, and only then to a public resolver.
+  route's gateway, and only then to a public resolver. Android keeps the
+  default route in a per-network table that toybox `ip route` does not print,
+  so the gateway is also derived from the `wlan0` subnet when both lookups
+  come up empty.
 - `init.ubuntu.sh` refreshes `resolv.conf` on every boot so a network change
   does not leave the chroot with a dead resolver.
 
