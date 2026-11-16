@@ -1,7 +1,14 @@
-# Qassa ROM — Xiaomi Redmi 4X (santoni)
+# santoni — headless Ubuntu 22.04 VPS
 
-> **keepQASSA Sisu v2.4_0.s** (Android 10) — Unofficial build for santoni.
-> Vanilla, custom signed, with XiaomiAddon & GCam preinstalled.
+> An Android 10 base (keepQASSA Sisu v2.4_0.s) stripped down to a headless
+> server, with an Ubuntu 22.04 chroot that comes up on every boot and sshd
+> reachable over the LAN. No Android UI, no launcher, no display server.
+
+This is **not** a phone ROM and it is **not** vanilla keepQASSA. The Android
+side exists only to boot the kernel, bring up Wi-Fi and host the chroot. 37 UI
+APKs are removed from the image, Zygote and SurfaceFlinger are stopped at boot,
+and the backlight is turned off. What you get is a 24/7 arm64 Linux box on a
+Redmi 4X.
 
 ---
 
@@ -9,24 +16,39 @@
 
 | Key | Value |
 |-----|-------|
-| **ROM** | keepQASSA Sisu v2.4_0.s (Android 10) |
+| **What it is** | Headless Ubuntu 22.04 VPS on Android 10 |
+| **Base** | keepQASSA Sisu v2.4_0.s (Android 10 / Q) |
 | **Device** | Xiaomi Redmi 4X (santoni) |
 | **SoC** | Qualcomm MSM8937 (Snapdragon 435) |
 | **Lunch** | `qassa_santoni-userdebug` |
 | **Build command** | `mka installclean && mka qassa` |
 | **Build type** | UNOFFICIAL |
-| **Current release** | [`v1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1) — `86f58bd` |
+| **Current release** | [`v1.1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1.1) — `0a809b0` |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
-| **SELinux** | Permissive (headless VPS build, see Hard Rule #2) |
-| **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.228 arm64 |
+| **SELinux** | Permissive (required by the chroot, see Hard Rule #2) |
+| **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.257 arm64 |
 | **Manifest** | `https://github.com/keepQASSA/manifest.git` branch `Q` |
 | **Maintainer** | [@kalomakan](https://t.me/kalomakan) / [ziachi](https://github.com/ziachi) |
 
 ---
 
+## What this is, and what it is not
+
+| | |
+|---|---|
+| **Is** | A headless arm64 Linux server. Ubuntu 22.04 in a chroot at `/data/ubuntu`, sshd on port 22, Wi-Fi managed without the Android framework. |
+| **Is** | Debloated. 37 APKs that only exist to draw something are removed from the image, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME`, `GCam` and `XiaomiAddon`. |
+| **Is** | Custom signed, SELinux permissive, ADB as root over USB and Wi-Fi. |
+| **Is not** | A daily-driver phone ROM. There is no launcher, no status bar, no camera app, no dialer. |
+| **Is not** | Vanilla keepQASSA. The device tree, the boot script, the Wi-Fi path and the package list are all modified. |
+| **Is not** | A container host. The kernel has no PID/UTS/IPC/USER namespaces, so Docker, LXC and podman cannot run. Plain `chroot` is fully supported. |
+
+---
+
 ## Repository Map
 
-All custom repos for this ROM. Clone each into the matching path inside the Qassa source tree.
+All custom repos for this build. Clone each into the matching path inside the
+Qassa source tree.
 
 ```
 ~/qassa/                                    <- ROM source root
@@ -86,6 +108,12 @@ source ~/.bashrc
 ccache -M 40G
 ```
 
+> On Ubuntu 24.04 the package names differ: `lib32ncurses5-dev` becomes
+> `lib32ncurses-dev`, `libncurses5-dev` becomes `libncurses-dev`, and
+> `libncurses5` does not exist (only `libncurses6`). The prebuilt clang still
+> needs `libncurses.so.5`, so install the bionic debs from
+> `archive.ubuntu.com/ubuntu/pool/main/n/ncurses/` and run `sudo ldconfig`.
+
 ### Step 1: Initialize ROM Source
 
 ```bash
@@ -142,6 +170,9 @@ git lfs pull
 ls -lh prebuilt/x86_64/webview.apk
 cd ~/qassa
 ```
+
+> `external/chromium-webview` is split into five sub-repos by the keepQASSA
+> manifest. Run `git lfs pull` inside each `prebuilt/*`, not in the parent.
 
 ### Step 4: Setup Signing Keys
 
@@ -202,31 +233,87 @@ tail -f /tmp/build.log          # monitor
 grep -i "error\|fail" /tmp/build.log  # check errors
 ```
 
+> `lunch` must not be piped. `lunch ... | tail -3` runs it in a subshell, so
+> `TARGET_PRODUCT` never reaches the parent shell, `VendorVars` in
+> `out/soong/soong.variables` ends up empty, and Soong dies with
+> `unknown variable '$(PATH_OVERRIDE_SOONG)'`. Redirect instead:
+> `lunch ... >/dev/null 2>&1`.
+
 ---
 
-## What's Included
+## What is in the image
 
-### Prebuilt Apps
-| App | Path | Description |
+### Shipped
+
+| Item | Path | Description |
 |-----|------|-------------|
-| GCam | `GCam/Camera.apk` | Google Camera |
-| XiaomiAddon | `XiaomiAddon/` | KCal display, USB Fast Charge, QS tiles |
 | BusyBox | `busybox/busybox` | static aarch64 1.37.0 — `udhcpc` and `wget` |
+| `curl` | built from `external/curl` | HTTPS downloader for `vps-setup` |
+| `wifi` | `wifi/wifi.sh` | `wpa_cli` + `udhcpc` front-end |
+| `vps-setup` | `vps-setup/vps-setup.sh` | one-command Wi-Fi + Ubuntu install |
+| `ubuntu-enter` | `ubuntu-enter/` | adb shell wrapper with the Wi-Fi password gate |
+| `init.ubuntu.sh` | `rootdir/init.ubuntu.sh` | boot script, installed to `/system/bin` |
+| `init.ubuntu.rc` | `rootdir/init.ubuntu.rc` | init service, installed to `/system/etc/init` |
+| `webcam_bridge` | `webcam-bridge/` | Camera2 NDK to MJPEG |
+| `sensor_bridge` | `sensor-bridge/` | `ASensorManager` to a log file |
+| `pulse-default.pa` | `audio-bridge/` | PulseAudio config only |
 
-### Device Features
-- ADB enabled by default (headless/automation access)
-- Custom signed with releasekey
-- SELinux permissive (headless VPS build)
-- Maintainer info embedded in build.prop
-- Ubuntu chroot auto-start: `init.ubuntu.sh` in `/system/bin`, `init.ubuntu.rc` in `/system/etc/init`
-- Bridge binaries: `webcam_bridge`, `sensor_bridge`, `pulse-default.pa`
+### Removed from the image
+
+37 APKs are dropped through `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages`
+stub in `prebuilts/Android.mk`. The list covers every APK that only exists to
+draw something for a human:
+
+```
+Aperture AudioFX Calendar Contacts DeskClock Dialer DocumentsUI
+DownloadProviderUi EasterEgg EmergencyInfo ExactCalculator FMRadio Gallery2
+GamingMode GCam Launcher3 Launcher3QuickStep LatinIME LiveWallpapersPicker
+MatLog messaging MusicFX OneTimeInitializer PowerOffAlarm Provision Settings
+SettingsIntelligence ShadyQuickStep SoundPickerPrebuilt StorageManager
+SystemUI VpnDialogs WallpaperBackup WallpaperCropper WallpaperPicker2
+XiaomiAddon XiaomiParts
+```
+
+`GCam` and `XiaomiAddon` are on that list. They are **not** in the image — a
+headless build has no UI to show them in, and Zygote is stopped at boot so they
+could never run.
+
+Deliberately kept: `framework-res`, `telephony-common`, `WcnssService`, the
+providers (`SettingsProvider`, `MediaProvider`, `TelephonyProvider`, ...), the
+telephony/modem stack (`TeleService`, `Telecom`, `ims`, `qcrilmsgtunnel`, `Stk`,
+`MmsService`, `CellBroadcastReceiver`) and the network services
+(`InProcessNetworkStack`, `SoftAPManager`, `WfdService`, `OsuLogin`,
+`PlatformCaptivePortalLogin`).
+
+### Why the `PRODUCT_PACKAGES` filter-out is gone
+
+`qassa_santoni.mk` used to strip the UI with
+`PRODUCT_PACKAGES := $(filter-out SystemUI Launcher3 ...)`. That never worked.
+`inherit-product` is deferred in this tree (`build/make/core/product.mk:378`):
+it appends a `$(INHERIT_TAG)<path>` marker instead of including the makefile, so
+at that point the variable holds only markers and the filter matches nothing.
+`get_build_var PRODUCT_PACKAGES` still lists `SystemUI`, `Launcher3`,
+`Launcher3QuickStep` and `XiaomiAddon` for that reason.
+
+The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
+in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
+overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
+never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
+
+The stub has to be installed for the override to apply, so `RemovePackages` is
+listed in `PRODUCT_PACKAGES` in `device.mk`. Keep the two lists in sync. A name
+that does not match a module is harmless — the override silently does nothing —
+so the list can be extended without risk.
+
+> `debloat/` is not the debloat mechanism. It holds a single Dolby stub
+> manifest and nothing else.
 
 ---
 
 ## Headless VPS Mode
 
-The ROM is built as a headless server: no Android UI, no display server, no
-boot animation. Everything is driven over ADB.
+The build is a headless server: no Android UI, no display server, no boot
+animation. Everything is driven over ADB, then over SSH.
 
 ### Quick start
 
@@ -251,14 +338,14 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
 ssh root@192.168.1.50
 ```
 
-Steps 1–2 need the cable. After step 2 the device is self-sufficient: it
-rejoins Wi-Fi and starts Ubuntu on every boot, so steps 3–5 work over the
+Steps 1-2 need the cable. After step 2 the device is self-sufficient: it
+rejoins Wi-Fi and starts Ubuntu on every boot, so steps 3-5 work over the
 network from then on.
 
 | Change | Where |
 |---|---|
 | `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
-| 37 UI APKs dropped, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME` | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| 37 UI APKs dropped, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME`, `GCam`, `XiaomiAddon` | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
 | `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote`, `zygote_secondary` stopped at boot, backlight 0 | `rootdir/init.ubuntu.sh` |
 | Wi-Fi through `wpa_cli` + busybox `udhcpc`, no `cmd wifi` / `svc wifi` | `wifi/wifi.sh`, `wifi/udhcpc.script` |
 | `service surfaceflinger` kept enabled | `rootdir/init.target.rc` |
@@ -279,29 +366,6 @@ so the override lands in the right order.
 > `bootanim` also stays enabled, but `debug.sf.nobootanimation=1` makes it exit
 > immediately, so nothing is drawn and init still gets its
 > `service.bootanim.exit` handshake.
-
-### Why the `PRODUCT_PACKAGES` filter-out is gone
-
-`qassa_santoni.mk` used to strip the UI with
-`PRODUCT_PACKAGES := $(filter-out SystemUI Launcher3 ...)`. That never worked.
-`inherit-product` is deferred in this tree (`build/make/core/product.mk:378`):
-it appends a `$(INHERIT_TAG)<path>` marker instead of including the makefile, so
-at that point the variable holds only markers and the filter matches nothing.
-`get_build_var PRODUCT_PACKAGES` still lists `SystemUI`, `Launcher3`,
-`Launcher3QuickStep` and `XiaomiAddon` for that reason.
-
-The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
-in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
-overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
-never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
-
-The list holds 37 names: every APK in the image that only exists to draw
-something. It was built by scanning `out/target/product/santoni` for `*.apk`
-after a full build, so it covers `system/app`, `system/priv-app`,
-`system/product/app` and `system/product/priv-app`. Core system packages, the
-providers, the telephony/modem stack and the network services are deliberately
-left in place. A name that does not match a module is harmless — the override
-silently does nothing — so the list can be extended without risk.
 
 ### ADB Access
 
@@ -369,8 +433,8 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
 
 ### Changing the ADB Wi-Fi password
 
-The password lives in `/data/adb_wifi_pass` (mode 600, owner `root:root`). Change it over USB,
-where no password is required:
+The password lives in `/data/adb_wifi_pass` (mode 600, owner `root:root`).
+Change it over USB, where no password is required:
 
 ```bash
 adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
@@ -451,8 +515,29 @@ prohibit-password` back.
 
 ### Boot behaviour
 
-`init.ubuntu.rc` starts `vps-boot` on `sys.boot_completed=1`, which runs
-`/vendor/bin/init.ubuntu.sh`:
+`init.ubuntu.rc` starts `vps-boot` from `on boot`, which runs
+`/system/bin/init.ubuntu.sh`:
+
+```sh
+service vps-boot /system/bin/init.ubuntu.sh
+    class late_start
+    user root
+    group root system
+    oneshot
+    disabled
+
+on boot
+    start qrngp
+    start vps-boot
+```
+
+The trigger used to be `on property:sys.boot_completed=1`. That property is only
+set once the framework finishes booting, and on a device with nothing to boot
+for it can stay unset for a long time — the first boot after a data wipe spends
+minutes in dex2oat. `on boot` runs after `/data` is mounted and after Zygote has
+started, which is all this needs. `qrngp` is started explicitly because it
+normally waits on `sys.boot_completed`, which never arrives once Zygote is
+stopped below, and sshd wants the entropy.
 
 | Step | What it does |
 |---|---|
@@ -505,32 +590,6 @@ adb shell cat /data/ubuntu-boot.log
 
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
-
-### Hardware bridges (disabled)
-
-Three bridge skeletons live in the device tree. Each ships as
-`Android.bp.disabled` with `enabled: false`, so Soong never parses the directory
-and the build is unchanged until the file is renamed to `Android.bp`.
-
-#### `webcam-bridge` — camera
-
-Camera2 NDK to MJPEG. `/dev/video*` on MSM8937 is not UVC, so the NDK is the
-only entry point. Missing: JPEG encode, the repeating request, and the MJPEG
-server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot —
-`cameraserver` rejects clients outside the `camera` group.
-
-#### `audio-bridge` — speaker and mic
-
-PulseAudio config only. The unix socket is `/data/ubuntu/tmp/pulse.sock` and the
-sink/source go through OpenSL ES so the Android audio HAL keeps the mixer. The
-arm64 PulseAudio binary and the `module-sles-*` modules are **not** in this
-tree; the config fails to load until they are installed in the chroot.
-
-#### `sensor-bridge` — sensors
-
-`ASensorManager` to `/data/ubuntu/tmp/sensors.log`, one line per sample. Reading
-`/dev/input` directly would split the evdev queue with `system_server`. The log
-is append-only and never rotated.
 
 ### Wi-Fi helper: `wifi`
 
@@ -605,6 +664,35 @@ They stay in the tree because they are harmless.
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
 | `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
 
+---
+
+## Hardware bridges
+
+Three bridges live in the device tree and are **built into the image**. They are
+Android-side helpers that expose hardware the chroot cannot reach on its own.
+
+#### `webcam-bridge` — camera
+
+Camera2 NDK to MJPEG. `/dev/video*` on MSM8937 is not UVC, so the NDK is the
+only entry point. Missing: JPEG encode, the repeating request, and the MJPEG
+server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot —
+`cameraserver` rejects clients outside the `camera` group.
+
+#### `audio-bridge` — speaker and mic
+
+PulseAudio config only. The unix socket is `/data/ubuntu/tmp/pulse.sock` and the
+sink/source go through OpenSL ES so the Android audio HAL keeps the mixer. The
+arm64 PulseAudio binary and the `module-sles-*` modules are **not** in this
+tree; the config fails to load until they are installed in the chroot.
+
+#### `sensor-bridge` — sensors
+
+`ASensorManager` to `/data/ubuntu/tmp/sensors.log`, one line per sample. Reading
+`/dev/input` directly would split the evdev queue with `system_server`. The log
+is append-only and never rotated.
+
+---
+
 ## Kernel Capability Check
 
 The prebuilt kernel is verified against the options the Ubuntu chroot needs:
@@ -629,6 +717,13 @@ Also absent, container-only: `CONFIG_PID_NS`, `CONFIG_UTS_NS`, `CONFIG_IPC_NS`,
 `CONFIG_BINFMT_MISC`. **Docker / LXC / podman cannot run on this kernel.**
 Plain `chroot` is fully supported.
 
+> The kernel is a **prebuilt binary**, not built from this tree. The
+> `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output. To
+> change a kernel option you need a new `Image.gz-dtb` from the Luuvy
+> maintainer — the source is not public.
+
+---
+
 ## Known Issues & Fixes
 
 Every fixed issue is written up in [CHANGELOG.md](CHANGELOG.md) with its
@@ -643,6 +738,9 @@ about are in [Troubleshooting](#troubleshooting) above.
 | Soong build error after .mk change | `rm -rf out/soong/.bootstrap` |
 | Disk full during build | `mka installclean` or `mka clean` |
 | Jack server OOM | `export JACK_SERVER_VM_ARGUMENTS="-Xmx4g"` |
+| `clang.real: error while loading shared libraries: libncurses.so.5` | install the bionic `libncurses5` / `libtinfo5` debs, then `sudo ldconfig` |
+| `ccache: error: Could not find compiler "clang" in PATH` | `TARGET_KERNEL_CLANG_VERSION` points at a `zyc_clang` that does not exist; use `clang-r353983c1` |
+| `MODULE.TARGET.ETC.init.ubuntu.rc already defined` | `init.ubuntu.rc` / `init.ubuntu.sh` are already defined in `rootdir/Android.mk`; do not add a second module |
 
 ---
 
@@ -666,10 +764,13 @@ about are in [Troubleshooting](#troubleshooting) above.
 
 ## For AI Agents
 
-If you are an AI agent (Viktor, Cursor, Copilot, etc.) continuing work on this project, read this section carefully.
+If you are an AI agent (Viktor, Cursor, Copilot, etc.) continuing work on this
+project, read this section carefully.
 
 ### Project Context
-- This is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
+- Base is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
+- The build is a **headless Ubuntu VPS**, not a phone ROM — do not add UI
+  packages back, and do not treat a missing launcher as a bug
 - Build system: standard AOSP Make (`mka`)
 - ROM manifest: `https://github.com/keepQASSA/manifest.git` branch `Q`
 - Source tree synced with `repo sync --depth=1` (shallow clones)
@@ -687,12 +788,12 @@ mka qassa -j$(nproc)
 
 | Task | How |
 |------|-----|
-| Add prebuilt app | Put APK + Android.mk in `device/xiaomi/santoni/<AppName>/`, add to device.mk PRODUCT_PACKAGES |
-| Change build prop | Edit `system.prop` or `qassa_santoni.mk` PRODUCT_PROPERTY_OVERRIDES |
-| Fix SELinux denial | Add rules to `sepolicy/vendor/`. The headless VPS build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
-| Debloat system app | Add entry to `debloat/Android.bp` |
-| Add overlay | Put XML in `overlay/` or `overlay-lineage/` |
-| Update kernel config | Not applicable — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
+| Remove another APK from the image | add its module name to `LOCAL_OVERRIDES_PACKAGES` in `prebuilts/Android.mk` |
+| Change build prop | edit `system.prop` or `qassa_santoni.mk` `PRODUCT_PROPERTY_OVERRIDES` |
+| Fix SELinux denial | add rules to `sepolicy/vendor/`. The headless build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
+| Add overlay | put XML in `overlay/` or `overlay-lineage/` |
+| Change kernel config | not possible from this tree — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
+| Change boot behaviour | `rootdir/init.ubuntu.sh` (script) and `rootdir/init.ubuntu.rc` (service) |
 
 ### Disk Management
 The `out/` directory grows to 200GB+. Always check `df -h` before building.
@@ -721,12 +822,13 @@ git config --global commit.gpgsign true
 Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
 Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-Current head: `86f58bd` (v32), released as
-[`v1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1).
+Current head: `0a809b0` (v33), released as
+[`v1.1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1.1).
 
 ---
 
 ## Credits
 
 - [omansh-krishn](https://github.com/omansh-krishn) — original keepQASSA device tree for santoni
-- [ziachi](https://github.com/ziachi) — santoni port, customizations, bug fixes
+- [ziachi](https://github.com/ziachi) — santoni port, headless VPS conversion, customizations, bug fixes
+- Luuvy — the prebuilt kernel (`C.4.0.eol202601`)
