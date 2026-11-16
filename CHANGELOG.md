@@ -71,13 +71,20 @@
 | 65 | v24 | fd4c91c | [v24] santoni: rebrand to qassa_ubuntu22-ziachi-santoni (#65) |
 | 66 | v25 | 59ca5c7 | Start the chroot from `on boot` and drop the unused HALs (#66) |
 | 67 | v26 | b24d68a | Fix wpa_supplicant socket dir + set clock after DHCP (#67) |
-| 68 | v27 | 0202f68 | Give wpa_supplicant a config file so it adds wlan0 (#68) |
+| 68 | v27 | 7dcebea | Give wpa_supplicant a config file so it adds wlan0 (#68) |
+| 69 | v28 | 08b3c16 | Add the main-table rule before the default route, resolve DNS without netd |
+| 70 | v29 | 9243aa2 | Resolve the clock-check host without netd |
+| 71 | v30 | 6de6fb4 | Start sshd from vps-setup instead of waiting for a reboot |
+| 72 | v31 | 2aba1f1 | Mount devpts in the chroot so sshd can allocate a pty |
+| 73 | v32 | 86f58bd | Do not trust a stale wpa_supplicant socket at boot |
 
 ## Releases
 
-| Version | Date | Build | Notes |
-|---------|------|-------|-------|
-| v20 | 2026-06-19 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20260619-0327-Vanilla-signed.zip | Clean build: Override removed, Dolby removed, PinnerService fixed, Spectrum added |
+| Version | Date | Build | Size (B) | SHA-256 | Notes |
+|---------|------|-------|----------|---------|-------|
+| v1.1 | 2026-11-16 | qassa_ubuntu22-ziachi-santoni.zip | 545707833 | `199a1eafc5eec73948a8bd4d04c1839496e89e213a11e20e7f52a4eb1219cccc` | v32 (`86f58bd`) — devpts and the stale wpa_supplicant socket fixed; flashed and verified on the device |
+| v1 | 2026-11-16 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20261116-0554-Vanilla-signed.zip | 640482400 | `bead5e737f20426f21f98a31c14d533d7a3cbf6f1b06d84819176de5c4f1dfe9` | v22 (`b2da746`) — first headless build published |
+| v20 | 2026-06-19 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20260619-0327-Vanilla-signed.zip | - | - | Clean build: Override removed, Dolby removed, PinnerService fixed, Spectrum added |
 
 ## Headless VPS Migration (v21)
 
@@ -1498,7 +1505,167 @@ Verified in the image: `vendor/etc/init/hw/init.qcom.rc` line 388 carries the
 `-c` argument and `system/bin/wifi` has five `WPA_CONF` references. Not yet
 verified on hardware.
 
+### #69 — Add the main-table rule before the default route, resolve DNS without netd
+
+**Problem**
+Three network bugs surfaced once the framework was stopped for good. Android has
+no `from all lookup main` rule: `ip rule` stops at
+`17000: from all fwmark 0x0/0x10000 lookup local_network` and then
+`32000: from all unreachable`, because netd creates the per-network tables and
+rules only when the framework registers a network. With the framework stopped
+they are never created, so the default route in the `main` table is never read
+and every packet falls through to `unreachable` -- `ping: connect: Network is
+unreachable`.
+
+The order matters too. `ip route replace default via 192.168.110.1 dev wlan0`
+was rejected with `RTNETLINK answers: Network is unreachable` (rc=2) while the
+rule was missing, because the kernel validates the nexthop through
+`fib_lookup()`, which reads the policy rules and not just the target table.
+
+Separately, netd only learns resolvers from the framework, so bionic
+`getaddrinfo()` cannot answer: `ping 8.8.8.8` succeeded while
+`ping cdimage.ubuntu.com` returned `unknown host` and `curl` died with
+`Could not resolve host`.
+
+**Fix**
+- `udhcpc.script` adds `ip rule add from all lookup main pref 20000`, guarded by
+  `grep -q "lookup main"`, **before** the default route, and drops the
+  `2>/dev/null` on the route so a failure is visible.
+- `udhcpc.script` writes the lease resolvers to `/data/vps_dns`.
+- `vps-setup` resolves with `busybox nslookup` -- its own DNS client, which does
+  not go through netd -- and hands `curl --resolve host:443:IP`.
+
+**Files**
+`wifi/udhcpc.script`, `vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+`ping 8.8.8.8` runs at 0% loss and
+`curl -fsSI --capath /system/etc/security/cacerts --resolve cdimage.ubuntu.com:443:91.189.91.124 https://cdimage.ubuntu.com/`
+returns `HTTP/1.1 200 OK` on the device. Verified in the image:
+`system/bin/udhcpc.script` (2483 B) and `system/bin/vps-setup` (15456 B) are
+identical to the repo.
+
+### #70 — Resolve the clock-check host without netd
+
+**Problem**
+`set_clock` read the `Date` header over plain HTTP, which needs no clock, but
+`curl` still had to resolve `connectivitycheck.gstatic.com` through bionic, and
+netd has no resolvers once the framework is stopped. The request never left the
+device, so the clock stayed in 1970 and every HTTPS download failed with
+`certificate is not yet valid`.
+
+**Fix**
+`set_clock` resolves the host itself with `busybox nslookup` (resolvers from
+`/data/vps_dns`, falling back to `8.8.8.8` and `223.5.5.5`) and passes
+`curl --resolve host:80:IP`, trying `connectivitycheck.gstatic.com`, then
+`www.google.com`, then `cdimage.ubuntu.com` before giving up.
+
+**Files**
+`wifi/wifi.sh`, `CHANGELOG.md`
+
+**Impact**
+The clock is set before the first HTTPS request. Verified in the image:
+`system/bin/wifi` (9435 B) is identical to the repo and carries two `nslookup`
+references and one `vps_dns`.
+
+### #71 — Start sshd from vps-setup instead of waiting for a reboot
+
+**Problem**
+`apt` does not start sshd in a chroot, and `vps-setup` never started it either,
+so the script printed an `ssh` command while port 22 was still closed and the
+first login failed with `Connection refused`. sshd only came up on the next
+boot, through `init.ubuntu.sh`.
+
+**Fix**
+- `vps-setup` starts sshd the way `init.ubuntu.sh` does: `ssh-keygen -A` then
+  `/usr/sbin/sshd` directly, not through `service`.
+- The `/dev`, `/proc` and `/sys` mounts stay up while sshd runs so sessions can
+  get a pty.
+- The final message only prints the `ssh` command when sshd is actually
+  listening, and says to reboot first when it is not.
+- The shadow check now runs with `$CHROOT_ENV`. It used to inherit Android's
+  PATH inside the chroot, so `grep` was never found and the "root has no
+  password hash" warning could not fire.
+
+**Files**
+`vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+`vps-setup` finishes with a reachable sshd. Verified in the image:
+`system/bin/vps-setup` (16636 B) is identical to the repo and carries five
+`sshd_up` references.
+
+### #72 — Mount devpts in the chroot so sshd can allocate a pty
+
+**Problem**
+`rbind /dev` does not bring `/dev/pts` on this device, so `posix_openpt` failed
+with `ENODEV` inside the chroot. `apt` could not open its log
+(`E: Can not write log (Is /dev/pts mounted?) - posix_openpt (19: No such
+device)`), and every ssh session came up without a pty:
+`PTY allocation request failed on channel 0`, then
+`Error opening terminal: unknown` for anything that needs a tty.
+`init.ubuntu.sh` already had a `mount -t devpts` fallback; `vps-setup` did not.
+
+**Fix**
+Both scripts mount devpts themselves when `/proc/mounts` has no entry for it
+yet, with `-o mode=0620,ptmxmode=0666,gid=5` -- without `ptmxmode`,
+`/dev/pts/ptmx` cannot be opened. The mount is guarded by a `/proc/mounts`
+check so repeated runs do not stack layers.
+
+**Files**
+`rootdir/init.ubuntu.sh`, `vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+`ssh -tt` gets a pty and `htop` runs. Verified in the image: `vps-setup`
+(17133 B) and `init.ubuntu.sh` (13570 B) are identical to the repo; `vps-setup`
+carries three `devpts` references and `init.ubuntu.sh` one `ptmxmode`.
+
+### #73 — Do not trust a stale wpa_supplicant socket at boot
+
+**Problem**
+The boot log showed `wifi: add_network failed` and then `wlan0 no address`, so
+the device came up with sshd listening but no network at all.
+`ensure_supplicant` only tested that the control socket file exists, and a
+socket left behind by the previous boot passes that test while nothing is
+listening, so every `wpa_cli` call failed and `associate()` gave up.
+
+**Fix**
+- `supplicant_alive()` asks the daemon with `wpa_cli -p <sock> -i wlan0 ping`,
+  which must answer `PONG`.
+- The stale socket is removed before the daemon is started, and `add_network` is
+  retried once after a restart.
+- `wifi_bringup` retries the whole reconnect three times, five seconds apart,
+  because the supplicant is still settling at boot.
+
+**Files**
+`wifi/wifi.sh`, `rootdir/init.ubuntu.sh`, `CHANGELOG.md`
+
+**Impact**
+The device comes up with an address and sshd reachable. Verified on hardware:
+`/data/ubuntu-boot.log` ends at `reconnected to aeqaeqa` ->
+`ip 142.251.150.120` -> `vps-boot: wlan0 192.168.110.171` with no
+`add_network failed`, and `ssh -tt root@192.168.110.171` gets `/dev/pts/1`.
+Verified in the image: `wifi` (10380 B), `vps-setup` (17133 B) and
+`init.ubuntu.sh` (13715 B) are identical to the repo.
+
 ## Key Changes by Version
+
+### v32
+- **Wi-Fi** — the supplicant is asked with `wpa_cli ping`, so a stale socket no longer blocks the boot
+- **PTY** — devpts is mounted in the chroot, so ssh sessions get a pty
+
+### v31
+- **PTY** — devpts is mounted in the chroot, so ssh sessions get a pty
+
+### v30
+- **SSH** — `vps-setup` starts sshd itself instead of waiting for a reboot
+
+### v29
+- **Clock** — the clock-check host is resolved with `busybox nslookup`, so the clock leaves 1970
+
+### v28
+- **Network** — the `lookup main` rule is added before the default route
+- **DNS** — resolvers come from the DHCP lease, so `curl` can resolve without netd
 
 ### v27
 - **Wi-Fi** — `wpa_supplicant` gets a config file, so `-i wlan0` actually adds the interface
