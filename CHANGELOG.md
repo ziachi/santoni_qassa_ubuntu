@@ -71,6 +71,7 @@
 | 65 | v24 | fd4c91c | [v24] santoni: rebrand to qassa_ubuntu22-ziachi-santoni (#65) |
 | 66 | v25 | 59ca5c7 | Start the chroot from `on boot` and drop the unused HALs (#66) |
 | 67 | v26 | b24d68a | Fix wpa_supplicant socket dir + set clock after DHCP (#67) |
+| 68 | v27 | 0202f68 | Give wpa_supplicant a config file so it adds wlan0 (#68) |
 
 ## Releases
 
@@ -1467,7 +1468,40 @@ the rootfs download and `apt` do.
 request. Verified in the image: `system/bin/wifi` has three `set_clock`
 references and no `mkdir -p "$WPA_SOCK"`. Not yet verified on hardware.
 
+### #68 — Give wpa_supplicant a config file so it adds wlan0
+
+**Problem**
+`vps-setup` still died at step 1 with `wpa_supplicant did not come up`, even
+though the daemon was alive: `getprop init.svc.wpa_supplicant` read `running`
+and `/data/vendor/wifi/wpa/sockets` was correctly `0770 wifi wifi`, but the
+directory was empty. `-i wlan0` on the service line does nothing on its own.
+`main.c` only reaches `wpa_supplicant_add_iface()` when the interface has a
+config file; with `-g` set (which fills `params.ctrl_interface`) and `-c`
+missing, it breaks out of the loop and runs the event loop with no interface
+at all. The daemon stays up, so init reports `running`, but no per-interface
+control socket is ever created.
+
+**Fix**
+- `init.qcom.rc` passes `-c/data/vendor/wifi/wpa/wpa_supplicant.conf`.
+- `wifi.sh` writes that file with `ctrl_interface=/data/vendor/wifi/wpa/sockets`
+  before starting the service, owned `wifi:wifi` `0660`.
+- `ensure_supplicant` waits for the socket directory instead of creating it,
+  and restarts the daemon unconditionally when the socket is missing, because
+  a daemon left over from a start without the config file will never create it.
+
+**Files**
+`rootdir/init.qcom.rc`, `wifi/wifi.sh`, `CHANGELOG.md`
+
+**Impact**
+`wpa_cli -i wlan0` has a socket to talk to, so `vps-setup` gets past step 1.
+Verified in the image: `vendor/etc/init/hw/init.qcom.rc` line 388 carries the
+`-c` argument and `system/bin/wifi` has five `WPA_CONF` references. Not yet
+verified on hardware.
+
 ## Key Changes by Version
+
+### v27
+- **Wi-Fi** — `wpa_supplicant` gets a config file, so `-i wlan0` actually adds the interface
 
 ### v26
 - **Wi-Fi** — the socket directory is left to init, so `wpa_supplicant` can bind

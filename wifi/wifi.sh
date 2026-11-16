@@ -11,6 +11,7 @@ WPA_SOCK=/data/vendor/wifi/wpa/sockets
 IFACE=wlan0
 BB=/system/bin/busybox
 CONF=/data/vps_wifi.conf
+WPA_CONF=/data/vendor/wifi/wpa/wpa_supplicant.conf
 PIDFILE=/data/udhcpc.$IFACE.pid
 
 usage() {
@@ -60,11 +61,31 @@ ensure_supplicant() {
     # drops to the wifi user, and init's own `mkdir` then fails because the
     # path already exists, so the wrong owner sticks.
     i=0
+    while [ "$i" -lt 20 ] && [ ! -d "$WPA_SOCK" ]; do
+        sleep 1
+        i=$((i + 1))
+    done
+    [ -d "$WPA_SOCK" ] || { echo "wifi: $WPA_SOCK is missing" >&2; return 1; }
+
+    # wpa_supplicant only adds the interface named on the command line when it
+    # also has a config file. With -g set and -c missing, main.c breaks out of
+    # the add_iface loop, the daemon runs with no interface, and no
+    # per-interface control socket is ever created.
+    if [ ! -s "$WPA_CONF" ]; then
+        printf 'ctrl_interface=%s\n' "$WPA_SOCK" > "$WPA_CONF"
+        chown wifi:wifi "$WPA_CONF" 2>/dev/null
+        chmod 0660 "$WPA_CONF" 2>/dev/null
+    fi
+
+    [ -S "$WPA_SOCK/$IFACE" ] && return 0
+    # Restart unconditionally: a daemon left over from a start without the
+    # config file has no interface and will never create the socket.
+    stop wpa_supplicant 2>/dev/null
+    start wpa_supplicant
+
+    i=0
     while [ "$i" -lt 20 ]; do
         [ -S "$WPA_SOCK/$IFACE" ] && return 0
-        if [ -d "$WPA_SOCK" ]; then
-            [ "$(getprop init.svc.wpa_supplicant)" = "running" ] || start wpa_supplicant
-        fi
         sleep 1
         i=$((i + 1))
     done
@@ -146,9 +167,9 @@ associate() {
     ip link set "$IFACE" up 2>/dev/null
     ensure_supplicant || return 1
 
-    # wpa_supplicant runs without -c, so it has no config file and save_config
-    # has nowhere to write. Networks added here live only until the daemon
-    # restarts, which is why the credentials are also kept in $CONF.
+    # The config file only carries ctrl_interface, so save_config has nowhere
+    # useful to write. Networks added here live only until the daemon restarts,
+    # which is why the credentials are also kept in $CONF.
     id=$(wpa add_network | tail -1)
     case "$id" in
         ''|*[!0-9]*)
