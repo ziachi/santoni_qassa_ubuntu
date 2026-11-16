@@ -132,11 +132,25 @@ wait_ip() {
 # which needs no clock, and set the system time from it.
 set_clock() {
     [ "$(date +%Y)" -ge 2020 ] && return 0
+    # netd only learns resolvers from the framework, so bionic cannot resolve
+    # and curl dies before it sends a request. busybox nslookup speaks DNS
+    # itself, so resolve the host here and hand curl the address.
+    hdr=
     i=0
-    while [ "$i" -lt 5 ]; do
-        hdr=$(curl -sI --max-time 10 \
-              http://connectivitycheck.gstatic.com/generate_204 2>/dev/null \
-              | tr -d '\r' | sed -n 's/^[Dd]ate: *//p' | head -1)
+    while [ -z "$hdr" ] && [ "$i" -lt 3 ]; do
+        for host in connectivitycheck.gstatic.com www.google.com cdimage.ubuntu.com; do
+            addr=
+            for ns in $(cat /data/vps_dns 2>/dev/null) 8.8.8.8 223.5.5.5; do
+                addr=$("$BB" nslookup "$host" "$ns" 2>/dev/null \
+                    | sed -n 's/^Address[ 0-9]*: *//p' | grep -v ':' | head -1)
+                [ -n "$addr" ] && break
+            done
+            [ -n "$addr" ] || continue
+            hdr=$(curl -sI --max-time 10 --resolve "$host:80:$addr" \
+                  "http://$host/" 2>/dev/null \
+                  | tr -d '\r' | sed -n 's/^[Dd]ate: *//p' | head -1)
+            [ -n "$hdr" ] && break
+        done
         [ -n "$hdr" ] && break
         sleep 2
         i=$((i + 1))
