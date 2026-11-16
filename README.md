@@ -45,6 +45,36 @@ Redmi 4X.
 
 ---
 
+## Proof
+
+![Windows PowerShell over SSH into the device, neofetch showing Ubuntu 22.04 on kernel 4.9.257, next to the Redmi 4X About phone screen](docs/screenshots/ssh-ubuntu-2204.jpg)
+
+A Windows PowerShell session on the LAN, `ssh root@192.168.110.171`, running
+`neofetch` inside the chroot. The phone is on the desk beside it, powered over
+USB with the charge LED on.
+
+| Field | Value |
+|---|---|
+| Kernel | `4.9.257-Luuvy-Checkmate-B.4.0.Lesion.EOL202601 aarch64` |
+| OS | Ubuntu 22.04 LTS aarch64 |
+| Host | Qualcomm MSM8940-PMI8950 QRD SKU7 |
+| CPU | Qualcomm MSM8940 (8) @ 1.401GHz |
+| Memory | 850MiB / 1817MiB |
+| Packages | 274 (dpkg) |
+| Shell | bash 5.1.16 |
+| Terminal | `/dev/pts/0` |
+| Device | Xiaomi Redmi 4X — MSM8937, Adreno 505, 5.0" 720x1280 IPS |
+
+`/dev/pts/0` is the line worth reading twice. It means the session got a real
+pty, which is the v31 devpts fix working: a chroot without devpts mounted
+cannot allocate one, and `ssh -tt` fails with
+`PTY allocation request failed on channel 0` even though the password was
+accepted.
+
+The panel on the right is the device's own `About phone` screen, included for
+the hardware summary. It reports `MSM8937` where the kernel reports `MSM8940`;
+both are the same Snapdragon 435 family, and the device tree targets `msm8937`.
+
 ## Repository Map
 
 All custom repos for this build. Clone each into the matching path inside the
