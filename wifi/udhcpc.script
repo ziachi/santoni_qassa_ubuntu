@@ -41,6 +41,12 @@ case "$1" in
                 || ip rule add from all lookup main pref 20000 2>/dev/null
             ip route replace default via "$router" dev "$interface" \
                 && log "default route -> $router"
+
+            # Multicast has no route of its own in main. The kernel falls back to
+            # the default route's device, so sends still work, but `ip route` then
+            # has no 224.0.0.0/4 entry for anything that looks for one.
+            ip route replace 224.0.0.0/4 dev "$interface" scope link 2>/dev/null \
+                && log "multicast route -> $interface"
         fi
         if [ -n "$dns" ]; then
             # netd only learns resolvers from the framework, so keep the lease's
