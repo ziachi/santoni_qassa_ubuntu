@@ -101,5 +101,10 @@ PRODUCT_PACKAGES += \
     sensor_bridge \
     pulse-default.pa
 
+# wpa_cli: vps-setup joins Wi-Fi through wpa_supplicant directly. The
+# module is LOCAL_PROPRIETARY_MODULE, so it installs to /vendor/bin.
+PRODUCT_PACKAGES += \
+    wpa_cli
+
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey

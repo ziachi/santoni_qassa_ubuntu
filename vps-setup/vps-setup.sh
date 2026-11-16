@@ -18,6 +18,7 @@ UBUNTU_ROOT=/data/ubuntu
 TARBALL=/data/local/tmp/ubuntu-base.tar.gz
 PRIMARY_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04/release/ubuntu-base-22.04-base-arm64.tar.gz
 FALLBACK_URL=https://cdimage.ubuntu.com/ubuntu-base/releases/22.04.5/release/ubuntu-base-22.04.5-base-arm64.tar.gz
+WPA_SOCKETS=/data/vendor/wifi/wpa/sockets
 
 die() {
     echo "vps-setup: $*" >&2
@@ -37,32 +38,64 @@ while [ "$i" -lt 20 ]; do
     sleep 1
     i=$((i + 1))
 done
+[ "$(getprop init.svc.wpa_supplicant)" = "running" ] \
+    || die "wpa_supplicant did not start"
 
-# `cmd wifi connect-network` is an Android 11 command. Android 10 has no shell
-# command that can join a network, so this build carries a backport from
-# patches/apply-wifi-connect-network.py. Say so instead of dying on the bare
-# "Unknown command" the shell prints.
-if ! cmd wifi help 2>&1 | grep -q "connect-network"; then
-    echo "vps-setup: this build's 'cmd wifi' has no connect-network command." >&2
-    echo "vps-setup: apply patches/apply-wifi-connect-network.py to the source" >&2
-    echo "vps-setup: tree and rebuild, then re-run vps-setup." >&2
-    exit 1
+# wpa_cli talks to wpa_supplicant directly, so the network is joined without
+# going through the framework. init.qcom.rc starts the daemon with
+# -O/data/vendor/wifi/wpa/sockets, so the control socket is not in the default
+# /data/misc/wifi/sockets and -p has to be passed explicitly.
+WPA_CLI=wpa_cli
+command -v wpa_cli >/dev/null 2>&1 || WPA_CLI=/vendor/bin/wpa_cli
+
+wpa() {
+    "$WPA_CLI" -p "$WPA_SOCKETS" -i wlan0 "$@" 2>/dev/null
+}
+
+net_id=$(wpa add_network | tail -1)
+case "$net_id" in
+    ''|*[!0-9]*) net_id="" ;;
+esac
+
+if [ -n "$net_id" ]; then
+    wpa set_network "$net_id" ssid "\"$SSID\"" >/dev/null
+    wpa set_network "$net_id" psk "\"$WIFI_PASS\"" >/dev/null
+    wpa enable_network "$net_id" >/dev/null
+    wpa save_config >/dev/null
+    wpa reassociate >/dev/null
+    echo "      wpa_cli joined the network as id $net_id"
+else
+    echo "      wpa_cli is not usable on this build"
 fi
-
-cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" || die "cmd wifi connect-network failed"
 
 echo "[2/7] Waiting for an IP address"
 ip_addr=""
 i=0
-while [ "$i" -lt 45 ]; do
+while [ "$i" -lt 20 ]; do
     ip_addr=$(ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1)
-    [ -n "$ip_addr" ] && break
-    ip_addr=$(getprop dhcp.wlan0.ipaddress 2>/dev/null)
     [ -n "$ip_addr" ] && break
     sleep 1
     i=$((i + 1))
 done
-[ -n "$ip_addr" ] || die "no IP on wlan0 after 45s — check the SSID and password"
+
+# ClientModeImpl tears down a connection it did not create ("Connected to
+# unknown networkId, disconnecting"), so a wpa_cli-only join can come up and
+# then be dropped. The framework path registers the network in
+# WifiConfigManager first, so it is kept as the fallback rather than the
+# primary mechanism.
+if [ -z "$ip_addr" ] && cmd wifi help 2>&1 | grep -q "connect-network"; then
+    echo "      retrying through the framework"
+    cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" >/dev/null 2>&1
+    i=0
+    while [ "$i" -lt 25 ]; do
+        ip_addr=$(ip -4 addr show wlan0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p' | head -1)
+        [ -n "$ip_addr" ] && break
+        sleep 1
+        i=$((i + 1))
+    done
+fi
+
+[ -n "$ip_addr" ] || die "no IP on wlan0 — check the SSID and password"
 echo "      wlan0 = $ip_addr"
 
 # ------------------------------------------------------------- 2. Download

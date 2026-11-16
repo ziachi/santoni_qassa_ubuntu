@@ -61,6 +61,11 @@ adb shell                                  # should prompt over Wi-Fi
 
 ## `cmd wifi connect-network`
 
+> **Status:** this backport is no longer the primary way `vps-setup`
+> joins a network. `vps-setup` drives `wpa_cli` directly and only falls
+> back to `cmd wifi connect-network` when the `wpa_cli` join produces no
+> IPv4 address. Keep the patch applied: the fallback path needs it.
+
 **Why:** Android 11 added `connect-network` to `cmd wifi`. Android 10 has no
 shell command that can join a network at all — `WifiShellCommand` only exposes
 `set-ipreach-disconnect`, `send-link-probe`, the network-suggestion commands and
