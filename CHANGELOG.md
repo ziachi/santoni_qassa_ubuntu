@@ -1685,6 +1685,12 @@ Geyser MOTD, both from the device and from another host on the LAN, and TCP
 25565 accepts connections. The ini and the hook only take effect after the next
 OTA build, because `/vendor` and `/system` are read-only on the running device.
 
+- Follow-up: the same per-network-table problem hit IPv6. The RA default route
+  lives in the wlan0 table and `main` only had `unreachable default`, so
+  Geyser's NetherNet ICE agent could not answer STUN requests sent to a
+  client's global IPv6 address and logged `Send failed, errno=101` about three
+  times a second. `wifi_bringup` now copies the IPv6 default into `main` too.
+
 ## Key Changes by Version
 
 ### v32

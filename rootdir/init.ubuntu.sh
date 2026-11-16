@@ -177,6 +177,17 @@ wifi_bringup() {
         sleep 2
     done
 
+    # Same per-network-table problem on IPv6: the RA-installed default lives in
+    # the wlan0 table and main only carries `unreachable default`. Geyser's
+    # NetherNet ICE agent runs in the chroot, so its sockets are unmarked and
+    # resolve through main; without this every STUN reply to a client's global
+    # IPv6 address fails with ENETUNREACH and floods the log.
+    GW6=$(ip -6 route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
+    if [ -n "$GW6" ]; then
+        ip -6 route replace default via "$GW6" dev wlan0 2>/dev/null \
+            && log "ipv6 default route -> $GW6"
+    fi
+
     # udhcpc's hook writes resolv.conf from the lease, which is the
     # authoritative answer and is refreshed on every renewal. Only build one
     # here when the hook never ran, which is the case on a device with no
