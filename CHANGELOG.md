@@ -1045,6 +1045,34 @@ A device that fails to bring sshd up now says why, in a file that survives the
 boot. Devices on builds before `c82969e` can be repaired without reflashing by
 removing the pidfile and starting sshd by hand.
 
+### #55 — Make the pushed-rootfs fallback actually work
+
+**Problem**
+On a clean flash the device has no Ubuntu rootfs, so `vps-setup` is the first
+thing to run. Its download step failed with `curl: (6) Could not resolve host:
+cdimage.ubuntu.com` — DNS on the device, not the mirror — and the script then
+told the user to push the rootfs from the PC. That advice could not work:
+`fetch()` starts with `rm -f "$TARBALL"`, so a pushed tarball was deleted before
+curl ran and the script failed the same way again. The message also said "no
+downloader on the device" when curl was present and only the lookup had failed,
+which points at the wrong cause.
+
+**Fix**
+- `vps-setup` uses a tarball already present at
+  `/data/local/tmp/ubuntu-base.tar.gz` instead of downloading, so the documented
+  fallback works.
+- The failure message names the real cause and prints the exact push command
+  with the full destination path.
+
+**Files**
+`vps-setup/vps-setup.sh`, `CHANGELOG.md`
+
+**Impact**
+A device whose DNS is broken can still be set up: download the rootfs on the
+PC, `adb push` it, re-run `vps-setup`. Step 7 is unaffected because apt inside
+the chroot resolves through the `resolv.conf` the script writes, not through
+netd.
+
 ## Key Changes by Version
 
 ### v20

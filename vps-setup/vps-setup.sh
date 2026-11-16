@@ -88,16 +88,22 @@ fetch() {
     fi
 }
 
-if fetch "$PRIMARY_URL"; then
+# A tarball pushed from the PC is used as-is. The failure path below tells the
+# user to push one, so the download must not delete it first.
+if [ -s "$TARBALL" ]; then
+    echo "      using the tarball already at $TARBALL"
+elif fetch "$PRIMARY_URL"; then
     :
 elif fetch "$FALLBACK_URL"; then
     :
 else
     echo
-    echo "vps-setup: no downloader on the device." >&2
-    echo "Push the rootfs from the PC instead:" >&2
-    echo "  adb push ubuntu-base.tar.gz /data/local/tmp/" >&2
-    echo "  adb shell vps-setup $SSID <password>" >&2
+    echo "vps-setup: could not download the rootfs." >&2
+    echo "  'Could not resolve host' means DNS on the device is broken, not" >&2
+    echo "  the mirror. Check with: ping -c1 cdimage.ubuntu.com" >&2
+    echo "  Or push the rootfs from the PC:" >&2
+    echo "    adb push ubuntu-base-22.04-base-arm64.tar.gz $TARBALL" >&2
+    echo "    adb shell vps-setup $SSID <password>" >&2
     exit 1
 fi
 
