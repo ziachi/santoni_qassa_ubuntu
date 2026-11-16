@@ -117,9 +117,17 @@ done
 # ------------------------------------------------------------- 4. Network
 echo "[5/7] Writing resolv.conf and apt sources"
 
-# Android resolves through netd and has no resolv.conf to copy, so the
-# chroot needs its own. The router is the only DNS server guaranteed to be
-# reachable; the public ones are a fallback because many networks drop them.
+# Android routes unmarked traffic through the main table, which holds only the
+# local subnet plus an `unreachable default`. Processes inside the chroot are
+# unmarked, so without a real default route in main every outbound packet dies
+# with ENETUNREACH and DNS fails no matter which resolver is configured. Copy
+# the gateway netd put in the wlan0 table into main.
+GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
+if [ -n "$GW" ] && ! ip route show 2>/dev/null | grep -q '^default via'; then
+    ip route add default via "$GW" dev wlan0 2>/dev/null \
+        && echo "      default route -> $GW"
+fi
+
 # Android resolves through netd and has no resolv.conf to copy. The resolver
 # the framework actually uses is the only one known to work on this network,
 # so read it out of dumpsys first. The gateway is not a reliable fallback: on

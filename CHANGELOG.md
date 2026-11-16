@@ -968,6 +968,12 @@ Two follow-on failures from #52, both seen on the first real device run:
 - `ubuntu-enter` builds the chroot environment with `env -i` and an explicit
   `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL` and `TERM` instead of trusting
   `/etc/profile`.
+- `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main
+  routing table. Android keeps the real default route in a per-network table
+  and leaves an `unreachable default` in main; chroot processes are unmarked,
+  so they hit that unreachable route and every outbound packet fails with
+  `ENETUNREACH` — which surfaces as `Temporary failure resolving` no matter
+  which resolver `resolv.conf` names.
 - `vps-setup` writes `resolv.conf` from the resolver `dumpsys connectivity`
   reports, which is the one the framework actually uses. `net.dns1`, the
   default route's gateway and the `wlan0` subnet are only fallbacks, because

@@ -156,6 +156,26 @@ chmod 0755 "$UBUNTU_ROOT/run/sshd" 2>/dev/null
 # the framework actually uses is the only one known to work on this network,
 # so read it out of dumpsys first. The gateway is not a reliable fallback: on
 # the santoni test network it routes but does not answer DNS.
+# Android routes unmarked traffic through the main table, which holds only the
+# local subnet plus an `unreachable default`. Processes inside the chroot are
+# unmarked, so without a real default route in main every outbound packet dies
+# with ENETUNREACH and DNS fails no matter which resolver is configured. Copy
+# the gateway netd put in the wlan0 table into main.
+# Wi-Fi comes up after this script runs, so wait for the gateway to appear.
+_route_try=0
+while [ $_route_try -lt 30 ]; do
+    GW=$(ip route show table all 2>/dev/null | awk '/^default via/ && /dev wlan0/ {print $3; exit}')
+    if [ -n "$GW" ]; then
+        if ! ip route show 2>/dev/null | grep -q '^default via'; then
+            ip route add default via "$GW" dev wlan0 2>/dev/null \
+                && log "default route -> $GW"
+        fi
+        break
+    fi
+    _route_try=$((_route_try + 1))
+    sleep 2
+done
+
 DNS=$(dumpsys connectivity 2>/dev/null \
     | sed -n 's/.*DnsAddresses: \[\([^]]*\)\].*/\1/p' \
     | tr ',' '\n' | grep -o '[0-9]\{1,3\}\(\.[0-9]\{1,3\}\)\{3\}' | head -1)
