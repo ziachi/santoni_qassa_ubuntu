@@ -52,9 +52,16 @@ ensure_supplicant() {
 # udhcpc runs as a daemon so the lease is renewed before it expires. The hook
 # never flushes the address, so a failed renewal leaves the old one in place
 # instead of taking the device off the network.
+#
+# /data survives a reboot, so the pidfile can name a PID that now belongs to an
+# unrelated process. Check the command line, not just that the PID is alive.
 start_dhcp() {
-    if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        return 0
+    if [ -s "$PIDFILE" ]; then
+        pid=$(cat "$PIDFILE")
+        if [ -r "/proc/$pid/cmdline" ] \
+                && tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q udhcpc; then
+            return 0
+        fi
     fi
     "$BB" udhcpc -i "$IFACE" -b -p "$PIDFILE" \
         -s /system/bin/udhcpc.script >/dev/null 2>&1

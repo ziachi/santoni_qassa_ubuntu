@@ -560,6 +560,11 @@ The lease is renewed by `busybox udhcpc` in daemon mode, with
 a renewal that fails leaves the device reachable on its old address instead of
 taking it off the network.
 
+`wifi dhcp` treats `/data/udhcpc.wlan0.pid` as a hint, not a fact: `/data`
+survives a reboot, so the PID in a stale file can belong to an unrelated
+process. It reads `/proc/<pid>/cmdline` and only skips the start when that
+process really is `udhcpc`.
+
 Inside the chroot the same CLI is available as `/usr/local/bin/wifi`. It chroots
 back into Android's root, so `/proc` has to be mounted — the boot script does
 that.

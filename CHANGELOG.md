@@ -1270,6 +1270,10 @@ would have expired two hours after boot.
 - `wifi/resolv.conf` is copied to `/system/etc/resolv.conf`. busybox `wget` and
   `nslookup` read that file and Android has none, because bionic asks netd.
   `curl` keeps using netd.
+- `wifi dhcp` reads `/proc/<pid>/cmdline` before trusting
+  `/data/udhcpc.wlan0.pid`. `/data` survives a reboot, so a stale file can name
+  a PID that now belongs to an unrelated process — the same trap that kept
+  sshd from starting (#54).
 
 **Files**
 `busybox/Android.mk`, `busybox/busybox`, `wifi/Android.mk`, `wifi/wifi.sh`,
