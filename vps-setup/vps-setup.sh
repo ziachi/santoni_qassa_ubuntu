@@ -188,6 +188,15 @@ deb http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe
 EOF
 fi
 
+# Android's kernel is built with CONFIG_ANDROID_PARANOID_NETWORK, which lets only
+# processes in group AID_INET (3003) or holding CAP_NET_RAW create an AF_INET
+# socket. apt drops to _apt for its download methods, and _apt has neither, so
+# every socket() returns EACCES. The resolver needs a UDP socket as well, so the
+# failure surfaces as "Temporary failure resolving" and reads like broken DNS.
+# Running the methods as root skips the drop entirely.
+mkdir -p "$UBUNTU_ROOT/etc/apt/apt.conf.d"
+echo 'APT::Sandbox::User "root";' > "$UBUNTU_ROOT/etc/apt/apt.conf.d/99sandbox"
+
 # ------------------------------------------------------- 5. ADB password
 echo "[6/7] Seeding the ADB Wi-Fi password"
 PASS_FILE=/data/adb_wifi_pass
@@ -234,7 +243,9 @@ CHROOT_ENV='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
 # The link was re-associated in step 1, and netd can flush the main table when
 # it re-validates the network, which removes the default route step 5 added.
 # apt has no retry of its own, so re-add the route and wait until the chroot
-# can actually resolve before handing it over.
+# can actually resolve before handing it over. Probe with ahostsv4: `getent
+# hosts` is satisfied by an AAAA answer alone and passes while apt, which needs
+# an IPv4 address, still fails.
 if [ -x "$UBUNTU_ROOT/usr/bin/getent" ]; then
     _net_try=0
     while [ "$_net_try" -lt 12 ]; do
@@ -242,7 +253,7 @@ if [ -x "$UBUNTU_ROOT/usr/bin/getent" ]; then
         if [ -n "$GW" ] && ! ip route show 2>/dev/null | grep -q '^default via'; then
             ip route add default via "$GW" dev wlan0 2>/dev/null
         fi
-        if chroot "$UBUNTU_ROOT" /usr/bin/getent hosts ports.ubuntu.com >/dev/null 2>&1; then
+        if chroot "$UBUNTU_ROOT" /usr/bin/getent ahostsv4 ports.ubuntu.com >/dev/null 2>&1; then
             echo "      DNS ok"
             break
         fi
@@ -275,8 +286,23 @@ chmod 600 "$ROOT_PASS_FILE" 2>/dev/null
 chown 0:0 "$ROOT_PASS_FILE" 2>/dev/null
 
 if [ -n "$root_pass" ]; then
-    if printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" /usr/sbin/chpasswd; then
-        echo "      root password set"
+    # chpasswd exits 0 inside this chroot without touching /etc/shadow, so build
+    # the hash with openssl (pulled in alongside openssh-server) and let usermod
+    # write the field directly. The hash goes in as an argument, never through a
+    # shell, so its $ characters survive.
+    root_hash=""
+    if [ -x "$UBUNTU_ROOT/usr/bin/openssl" ]; then
+        root_hash=$(printf '%s\n' "$root_pass" \
+            | chroot "$UBUNTU_ROOT" /usr/bin/openssl passwd -6 -stdin 2>/dev/null)
+    fi
+    if [ -n "$root_hash" ]; then
+        if chroot "$UBUNTU_ROOT" /usr/sbin/usermod -p "$root_hash" root; then
+            echo "      root password set"
+        else
+            echo "      could not set the root password"
+        fi
+    elif printf 'root:%s\n' "$root_pass" | chroot "$UBUNTU_ROOT" /usr/sbin/chpasswd; then
+        echo "      root password set (chpasswd)"
     else
         echo "      could not set the root password"
     fi
@@ -292,6 +318,8 @@ if [ -n "$root_pass" ]; then
             echo 'PermitRootLogin yes' >> "$SSHD_CONF"
         fi
         echo "      PermitRootLogin yes"
+    else
+        echo "      no $SSHD_CONF - openssh-server did not install"
     fi
 fi
 
