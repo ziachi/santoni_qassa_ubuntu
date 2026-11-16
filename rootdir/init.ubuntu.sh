@@ -384,20 +384,6 @@ else
     log "openssh-server not installed — apt install -y openssh-server"
 fi
 
-# --- 6b. Minecraft server ------------------------------------------------
-# The server lives on /data, so it survives a reboot, but nothing started it:
-# it was launched by hand over SSH. start.sh is idempotent, so calling it on
-# every boot is safe, and it also brings up the NetherNet discovery responder
-# that answers Bedrock's LAN broadcast on UDP 7551.
-if [ -x "$UBUNTU_ROOT/root/mcserver/start.sh" ]; then
-    chroot "$UBUNTU_ROOT" /bin/sh -c \
-        'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-         /root/mcserver/start.sh' &
-    log "mcserver start requested"
-else
-    log "no /root/mcserver/start.sh, skipping Minecraft server"
-fi
-
 # --- 7. Wi-Fi, in the background -----------------------------------------
 # sshd is listening by now, so the device becomes reachable the moment the
 # link comes up. Running the bring-up here keeps a dead router from delaying
