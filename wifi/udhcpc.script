@@ -1,0 +1,50 @@
+#!/system/bin/sh
+# udhcpc.script — busybox udhcpc hook for the headless VPS.
+#
+# udhcpc calls this with $1 = deconfig|bound|renew|leasefail|nak and the lease
+# in the environment: $interface, $ip, $subnet (a dotted netmask), $router,
+# $dns, $lease and $serverid.
+#
+# Nothing in the framework renews the lease once Zygote is stopped, so this is
+# the only place that keeps wlan0 addressed and the chroot's resolv.conf
+# current.
+
+UBUNTU_ROOT=/data/ubuntu
+BB=/system/bin/busybox
+
+log() {
+    echo "udhcpc: $*"
+}
+
+# The address is never flushed. A renewal that fails has to leave the device
+# reachable on its old address, and the daemon calls deconfig before it has a
+# lease to install.
+case "$1" in
+    deconfig)
+        log "$interface deconfigured, keeping the address"
+        ;;
+    bound|renew)
+        # busybox ifconfig takes the dotted netmask udhcpc hands over; toybox
+        # `ip addr add` wants a prefix length instead.
+        if "$BB" ifconfig "$interface" "$ip" netmask "$subnet" up 2>/dev/null
+        then
+            log "$interface $ip netmask $subnet"
+        fi
+        if [ -n "$router" ]; then
+            ip route replace default via "$router" dev "$interface" \
+                2>/dev/null && log "default route -> $router"
+        fi
+        if [ -n "$dns" ] && [ -d "$UBUNTU_ROOT/etc" ]; then
+            {
+                for ns in $dns; do echo "nameserver $ns"; done
+                echo "nameserver 8.8.8.8"
+                echo "nameserver 223.5.5.5"
+            } > "$UBUNTU_ROOT/etc/resolv.conf"
+            log "resolv.conf -> $dns"
+        fi
+        log "lease ${lease:-?}s from ${serverid:-?}"
+        ;;
+    leasefail|nak)
+        log "$1, keeping the address"
+        ;;
+esac

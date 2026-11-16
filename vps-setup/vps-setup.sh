@@ -30,28 +30,11 @@ die() {
 
 # ---------------------------------------------------------------- 1. Wi-Fi
 echo "[1/7] Joining Wi-Fi: $SSID"
-svc wifi enable
 
-i=0
-while [ "$i" -lt 20 ]; do
-    [ "$(getprop init.svc.wpa_supplicant)" = "running" ] && break
-    sleep 1
-    i=$((i + 1))
-done
-
-# `cmd wifi connect-network` is an Android 11 command. Android 10 has no shell
-# command that can join a network, so this build carries a backport from
-# patches/apply-wifi-connect-network.py. Say so instead of dying on the bare
-# "Unknown command" the shell prints.
-if ! cmd wifi help 2>&1 | grep -q "connect-network"; then
-    echo "vps-setup: no connect-network in cmd wifi" >&2
-    echo "vps-setup: apply patches/apply-wifi-connect-network.py" >&2
-    echo "vps-setup: to the source tree, rebuild, re-run." >&2
-    exit 1
-fi
-
-cmd wifi connect-network "$SSID" wpa2 "$WIFI_PASS" \
-    || die "cmd wifi connect-network failed"
+# `svc wifi` and `cmd wifi` both go through system_server, which is stopped at
+# boot (see rootdir/init.ubuntu.sh). /system/bin/wifi drives wpa_supplicant and
+# udhcpc directly, so it works with the framework down.
+/system/bin/wifi connect "$SSID" "$WIFI_PASS" || die "could not join $SSID"
 
 echo "[2/7] Waiting for an IP address"
 ip_addr=""
@@ -139,6 +122,23 @@ tar -xzf "$TARBALL" -C "$UBUNTU_ROOT" || die "tar failed"
 for d in dev dev/pts proc sys tmp run; do
     mkdir -p "$UBUNTU_ROOT/$d"
 done
+
+# A `wifi` command inside the chroot, so the VPS can rejoin a network without
+# adb. It chroots back into Android's root because the script uses absolute
+# /system and /vendor paths that do not exist inside Ubuntu.
+mkdir -p "$UBUNTU_ROOT/usr/local/bin"
+cat > "$UBUNTU_ROOT/usr/local/bin/wifi" <<'WRAPPER'
+#!/bin/sh
+# Run the Android-side Wi-Fi CLI from inside the chroot. /proc has to be
+# mounted (init.ubuntu.sh does it on every boot) because /proc/1/root is how
+# the Android root is reached from here.
+if [ ! -d /proc/1/root/system/bin ]; then
+    echo "wifi: /proc is not mounted in the chroot" >&2
+    exit 1
+fi
+exec /usr/sbin/chroot /proc/1/root /system/bin/wifi "$@"
+WRAPPER
+chmod 0755 "$UBUNTU_ROOT/usr/local/bin/wifi"
 
 # ------------------------------------------------------------- 4. Network
 echo "[5/7] Writing resolv.conf and apt sources"

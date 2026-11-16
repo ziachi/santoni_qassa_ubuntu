@@ -64,6 +64,13 @@ QASSA_BUILD_TYPE := UNOFFICIAL
 # overridden names out of PRODUCTS.<mk>.PRODUCT_PACKAGES before install, so
 # the APKs never reach the image even though they stay in the requested list.
 # Keep both lists in sync when adding a package here.
+#
+# The list there now covers every UI APK that was still installed: the 16 that
+# survived the first pass (Settings, SettingsIntelligence, DocumentsUI, FMRadio,
+# MatLog, Calendar, DeskClock, ExactCalculator, Gallery2, LatinIME, messaging,
+# Contacts, Dialer, WallpaperCropper, WallpaperPicker2, LiveWallpapersPicker)
+# plus the rest of the UI found by scanning out/target/product/santoni. Core
+# system packages, providers and the telephony/modem stack are left alone.
 
 # Maintainer
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -96,11 +103,28 @@ PRODUCT_PACKAGES += \
     ubuntu-enter \
     vps-setup \
     wifi \
+    udhcpc.script \
+    busybox \
+    wpa_cli \
     init.ubuntu.sh \
     init.ubuntu.rc \
     webcam_bridge \
     sensor_bridge \
     pulse-default.pa
+
+# wpa_cli is the only way to join a network once Zygote is stopped: `cmd wifi`
+# and `svc wifi` both need system_server. The module lives in
+# external/wpa_supplicant_8 and installs to /vendor/bin because it is marked
+# proprietary.
+#
+# busybox supplies udhcpc, which replaces the framework's DHCP client, and wget
+# as a second downloader next to curl.
+#
+# busybox wget and nslookup read /etc/resolv.conf, which Android does not have
+# because bionic asks netd instead. Ship a static one with public resolvers so
+# those applets can resolve names; curl keeps using netd.
+PRODUCT_COPY_FILES += \
+    device/xiaomi/santoni/wifi/resolv.conf:system/etc/resolv.conf
 
 # curl: vps-setup downloads the Ubuntu rootfs on the device. The in-tree
 # external/curl module is used instead of a prebuilt static blob, so the
