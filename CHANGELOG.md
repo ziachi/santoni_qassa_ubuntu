@@ -77,6 +77,7 @@
 | 71 | v30 | 6de6fb4 | Start sshd from vps-setup instead of waiting for a reboot |
 | 72 | v31 | 2aba1f1 | Mount devpts in the chroot so sshd can allocate a pty |
 | 73 | v32 | 86f58bd | Do not trust a stale wpa_supplicant socket at boot |
+| 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
 
 ## Releases
 
@@ -1647,6 +1648,42 @@ The device comes up with an address and sshd reachable. Verified on hardware:
 `add_network failed`, and `ssh -tt root@192.168.110.171` gets `/dev/pts/1`.
 Verified in the image: `wifi` (10380 B), `vps-setup` (17133 B) and
 `init.ubuntu.sh` (13715 B) are identical to the repo.
+
+### #74 — Stop filtering multicast/broadcast and install the 224.0.0.0/4 route
+
+**Problem**
+A Minecraft server on the device (Paper on TCP 25565, Geyser bridging Bedrock on
+UDP 19132) never appeared in a client's LAN list. The audit ruled the network
+stack out: `CONFIG_IP_MULTICAST=y`, `wlan0` carried `BROADCAST,MULTICAST`,
+`rp_filter=0`, SELinux permissive, and `iptables-legacy` had no rule touching
+`224.0.0.0/4`. `tcpdump` on `wlan0` showed multicast and broadcast leaving the
+device, and inbound multicast from `192.168.110.147` plus inbound broadcast from
+`192.168.110.1` arriving, so both directions already worked.
+
+Two settings were still wrong for a server that has to answer a discovery probe
+at any moment rather than inside an awake window:
+
+- `McastBcastFilter=3` made the firmware drop inbound multicast/broadcast while
+  the radio was in power save, and `gEnableBmps=1` put it there between beacons.
+- `224.0.0.0/4` had no route in `main`. Sends worked only because the kernel
+  falls back to the default route's device, so `ip route` had no entry for
+  anything that looks for one.
+
+**Fix**
+- `wifi/WCNSS_qcom_cfg.ini`: `McastBcastFilter=0`, `gEnableBmps=0`.
+- `wifi/udhcpc.script`: install `224.0.0.0/4 dev <iface> scope link` on every
+  `bound`/`renew`, next to the default route.
+
+**Files**
+`wifi/WCNSS_qcom_cfg.ini`, `wifi/udhcpc.script`, `CHANGELOG.md`
+
+**Impact**
+Applied at runtime on the device (`iw dev wlan0 set power_save off`,
+`ip route replace 224.0.0.0/4 dev wlan0 scope link`) and verified: a RakNet
+unconnected ping to `192.168.110.255:19132` is answered with `id=0x1c` and the
+Geyser MOTD, both from the device and from another host on the LAN, and TCP
+25565 accepts connections. The ini and the hook only take effect after the next
+OTA build, because `/vendor` and `/system` are read-only on the running device.
 
 ## Key Changes by Version
 
