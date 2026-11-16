@@ -327,7 +327,7 @@ if [ -n "$root_pass" ]; then
         echo "      could not set the root password"
     fi
     # chpasswd can exit 0 while leaving the hash untouched, so check the field.
-    if chroot "$UBUNTU_ROOT" /bin/sh -c 'grep -q "^root:[!*]" /etc/shadow'; then
+    if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; grep -q '^root:[!*]' /etc/shadow"; then
         echo "      WARNING: root has no password hash, login will fail"
     fi
     SSHD_CONF="$UBUNTU_ROOT/etc/ssh/sshd_config"
@@ -343,14 +343,44 @@ if [ -n "$root_pass" ]; then
     fi
 fi
 
-umount "$UBUNTU_ROOT/sys" 2>/dev/null
-umount "$UBUNTU_ROOT/proc" 2>/dev/null
-umount "$UBUNTU_ROOT/dev/pts" 2>/dev/null
-umount "$UBUNTU_ROOT/dev" 2>/dev/null
+# apt does not start sshd in a chroot, and the user should not have to reboot
+# to reach the box. Start it the way init.ubuntu.sh does on boot.
+sshd_up=0
+if netstat -tln 2>/dev/null | grep -q ':22 '; then
+    sshd_up=1
+    echo "      sshd already listening on :22"
+elif [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
+    # /run lives on /data, so a stale pid file can name an unrelated process.
+    rm -f "$UBUNTU_ROOT/run/sshd.pid"
+    if chroot "$UBUNTU_ROOT" /bin/sh -c \
+            'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+             export TMPDIR=/tmp
+             mkdir -p /run/sshd && chmod 0755 /run/sshd
+             ssh-keygen -A
+             /usr/sbin/sshd'; then
+        sshd_up=1
+        echo "      sshd started"
+    else
+        echo "      sshd failed to start, it will come up on the next boot"
+    fi
+fi
+
+# sshd needs /dev/pts to give each session a pty, so the mounts stay up while
+# it runs. init.ubuntu.sh re-mounts them on boot either way.
+if [ "$sshd_up" = 0 ]; then
+    umount "$UBUNTU_ROOT/sys" 2>/dev/null
+    umount "$UBUNTU_ROOT/proc" 2>/dev/null
+    umount "$UBUNTU_ROOT/dev/pts" 2>/dev/null
+    umount "$UBUNTU_ROOT/dev" 2>/dev/null
+fi
 
 echo
 echo "Done. Ubuntu 22.04 is at $UBUNTU_ROOT"
-echo "SSH: ssh root@<phone-ip>   password: $root_pass"
+if [ "$sshd_up" = 1 ]; then
+    echo "SSH: ssh root@$ip_addr   password: $root_pass"
+else
+    echo "SSH: not running yet - reboot, then ssh root@$ip_addr   password: $root_pass"
+fi
 echo "  Wi-Fi IP : $ip_addr"
 echo "  Enter    : adb shell"
 echo "  SSH      : ssh root@$ip_addr"
