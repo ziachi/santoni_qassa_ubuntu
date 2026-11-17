@@ -1,0 +1,23 @@
+santoni — headless Ubuntu 22.04 VPS
+Copyright (c) 2026 ziachi
+https://github.com/ziachi/santoni_qassa_ubuntu
+
+This product includes software developed as part of the Android Open Source
+Project (https://source.android.com/) and the keepQASSA project
+(https://github.com/keepQASSA), both licensed under the Apache License,
+Version 2.0.
+
+The device tree, the boot script, the Wi-Fi bring-up path, the package list and
+the chroot overlay under vps-setup/ are original work by ziachi.
+
+Licensing is split by component:
+
+  * The Android device tree — everything outside vps-setup/ — is licensed under
+    the Apache License, Version 2.0. See LICENSE.
+
+  * The server and chroot components under vps-setup/ are licensed under the
+    Proprietary Source-Available terms in vps-setup/LICENSE. They are published
+    so users can audit and build them, not so they can be repackaged.
+
+The split exists for a security reason. See "WHY THIS STRICT LICENSE EXISTS" in
+vps-setup/LICENSE.

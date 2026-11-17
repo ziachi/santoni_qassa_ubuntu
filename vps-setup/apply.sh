@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
 #
 # apply.sh — apply the chroot overlay to a running Ubuntu chroot.
 #

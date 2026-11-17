@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
 #
 # vps-setup — one-shot first-time setup for the headless santoni VPS.
 #

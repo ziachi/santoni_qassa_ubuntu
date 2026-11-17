@@ -1,0 +1,91 @@
+vps-setup — headless Ubuntu 22.04 chroot for the santoni VPS
+Copyright (c) 2026 ziachi
+https://github.com/ziachi/santoni_qassa_ubuntu
+
+PROPRIETARY SOURCE-AVAILABLE LICENSE
+ALL RIGHTS RESERVED
+
+This license covers every file under vps-setup/ in this repository:
+vps-setup.sh, apply.sh, packages.list, offline-debs.txt, Android.mk, and
+everything under vps-setup/rootdir/.
+
+The source is published so that users can read it, audit it, and build it for
+their own device. It is not published for redistribution.
+
+--------------------------------------------------------------------------
+WHY THIS STRICT LICENSE EXISTS
+--------------------------------------------------------------------------
+
+A headless server image is a target. It runs 24/7, it holds SSH keys, it sits on
+someone's home network, and it has no screen — so nobody notices when it starts
+doing something it was not asked to do.
+
+The pattern is well documented. Someone forks a project like this one, strips
+the author's name out, renames it, and publishes a "faster" or "optimised"
+build. The build boots, the SSH login works, the README looks right. What the
+user does not see is the extra payload: a crypto miner that keeps the CPU at
+full tilt, a reverse shell that dials out on boot, or a tracker that reports the
+device's address and credentials to a third party.
+
+The user's experience is a phone that runs hot, drains battery, and feels slow.
+They blame the ROM, or the hardware, or the kernel. They do not suspect that
+the image they flashed is mining for someone else.
+
+That is the failure mode this license exists to prevent. Repacking is not
+forbidden here because of vanity. It is forbidden because a repacked build of
+this project is indistinguishable from a compromised one, and the people who
+suffer from that are the users, not the author.
+
+If you want to build on this work, the terms below tell you how. If you want to
+ship a modified build to other people, ask first.
+
+--------------------------------------------------------------------------
+TERMS
+--------------------------------------------------------------------------
+
+1. HARD CREDIT REQUIREMENT
+
+   Any reference to, study of, or permitted use of this work must credit
+   "ziachi" by name and link to the official repository at
+   https://github.com/ziachi/santoni_qassa_ubuntu.
+
+   The copyright header at the top of every file must be preserved verbatim.
+   Removing it, replacing it, or moving it out of the file is a violation of
+   this license.
+
+2. NO UNAUTHORIZED REDISTRIBUTION OR MODIFICATION
+
+   You may not redistribute, publish, mirror, or otherwise make available any
+   build, repack, or modified version of the files under vps-setup/ without
+   prior written permission from the copyright holder.
+
+   You may not insert hidden code of any kind — crypto miners, trackers,
+   backdoors, telemetry, remote shells, or anything else the user did not ask
+   for — into this work or into any build derived from it.
+
+   You may not use the name "ziachi", the project name, or the official
+   repository URL to promote, endorse, or lend credibility to an unofficial
+   fork, repack, or build.
+
+3. REVOCATION AND DMCA TAKEDOWN
+
+   The copyright holder may revoke the permission granted by this license at
+   any time, for any reason, with or without notice.
+
+   The copyright holder reserves the right to file a DMCA takedown against any
+   fork, repository, release, mirror, or distribution that violates these
+   terms, and to pursue any other remedy available under applicable law.
+
+--------------------------------------------------------------------------
+NO WARRANTY
+--------------------------------------------------------------------------
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Flashing a custom image can brick your device, void your warranty, and expose
+data. You do it at your own risk.

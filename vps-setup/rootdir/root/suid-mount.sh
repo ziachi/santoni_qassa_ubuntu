@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
 # Android mounts /data with nosuid, so every setuid bit inside the chroot is
 # inert: sudo/su/passwd die with "effective uid is not 0". A bind mount carries
 # its own flags, so re-binding the directory with suid enabled fixes it without

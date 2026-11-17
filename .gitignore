@@ -1,1 +1,11 @@
 GCam/
+
+# Secrets — never commit these
+.env*
+*.key
+*.pem
+*.p12
+*secret*
+*token*
+id_rsa
+id_ed25519

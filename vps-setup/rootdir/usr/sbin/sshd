@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
 # init.ubuntu.sh starts sshd directly from inside the chroot, so this is the
 # only hook guaranteed to run on every boot. Re-establish the suid bind mounts
 # before the daemon can accept a login.

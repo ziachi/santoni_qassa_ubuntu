@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
 # Dijalankan otomatis oleh wrapper /usr/sbin/sshd 5 detik setelah sshd hidup,
 # jadi tidak butuh perubahan di init.ubuntu.sh. Idempoten, aman dijalankan
 # manual kapan saja.
