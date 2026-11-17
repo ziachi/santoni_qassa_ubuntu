@@ -80,6 +80,7 @@
 | 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
 | 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
+| 77 | - | 566cce2 | Swap the prebuilt kernel for the 2026-11-17 UVC/UAC2 build |
 
 ## Releases
 
@@ -1758,6 +1759,39 @@ Applied by hand on the running device and read back: all five sysctls report the
 new values, `/etc/group` lists 3003/3004/3005, and `hostname` is `santoni`. The
 boot hook only takes effect after the next OTA build. The boot script is
 game-agnostic again: nothing in it names a specific server.
+
+### #77 — Swap the prebuilt kernel for the 2026-11-17 UVC/UAC2 build
+
+**Problem**
+The 2026-01-29 Luuvy kernel has no USB video class gadget, so the device cannot
+present its camera to a USB host. The 2026-11-17 build of the same kernel adds
+`f_uvc` and `f_uac2`, but the release ships as an AnyKernel3 zip whose
+`anykernel.sh` breaks this ROM: it sets `TMPSYSROOT=/system_root` and inserts
+`import /system_root/system/etc/init/init.spectrum.rc` into
+`/system_root/system/etc/init/hw/init.rc`. `/system_root` is a recovery-only
+mount point, so at boot the import cannot be resolved, `ParseData()` returns
+false before parsing the rest of `init.rc`, and the device bootloops. Flashing
+that zip over v33 produced exactly that.
+
+**Fix**
+- `prebuilts/kernel/Image.gz-dtb`: replaced with the 2026-11-17 image, SHA-256
+  `3594196d447f01dcfaece128b36b9fdf8f97d68de9a147d7af1f05965e851b0f`. Only the
+  kernel is taken from the zip; `anykernel.sh` is not used.
+- `prebuilts/kernel/README.md`: records the kallsyms diff against the
+  2026-01-29 image, the new UVC/UAC2/KernelSU symbols, and the fact that the
+  embedded IKCONFIG blob is stale (B.3.0) and still reports
+  `CONFIG_MEDIA_USB_SUPPORT`, `CONFIG_USB_CONFIGFS_F_UVC` and
+  `CONFIG_USB_CONFIGFS_F_UAC2` as off.
+
+**Files**
+- `prebuilts/kernel/Image.gz-dtb`
+- `prebuilts/kernel/README.md`
+
+**Impact**
+`kernel.config` is byte-identical to the previous snapshot because the stale
+IKCONFIG blob did not change, so `tools/verify-ikconfig.sh` still reports
+`required: 46/49 present, 3 missing` for both builds. The boot image is built by
+the normal Qassa build, which keeps the v33 ramdisk and cmdline untouched.
 
 ## Key Changes by Version
 
