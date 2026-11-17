@@ -32,6 +32,62 @@ Redmi 4X.
 
 ---
 
+## Default Credentials & First-Time Login
+
+Every account below ships with a **known default password**, so a fresh install
+is reachable without a console. Change all of them on first login.
+
+| Account | Where | Default password | Change it with |
+|---|---|---|---|
+| `root` — Ubuntu chroot, SSH port 22 | `ssh root@<device-ip>` | `santoniadmin` | `passwd` |
+| `ubuntu` — non-root, `sudo` NOPASSWD | `ssh ubuntu@<device-ip>` | `ubuntu` | `passwd` |
+| ADB over Wi-Fi, port 5555 | `adb -s <device-ip>:5555 shell` | `santoniadmin` | see below |
+
+```bash
+# root and ubuntu, over SSH
+ssh root@<device-ip>   'passwd'
+ssh ubuntu@<device-ip> 'passwd'
+
+# ADB over Wi-Fi — change it over USB, where no password is needed
+adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
+```
+
+`vps-setup` accepts `UBUNTU_ROOT_PASS` to override the root default at install
+time, and writes the value to `/data/ubuntu_root_pass` (mode 600) so it stays
+discoverable over USB.
+
+> **Do not leave these defaults in place on a device reachable from a network
+> you do not control.** Port 5555 is a root shell and port 22 is root SSH. The
+> defaults exist so the first login works, not so they can stay.
+
+---
+
+## ⚠️ Security Notice & Official Source
+
+The only official source for this project is:
+
+**https://github.com/ziachi/santoni_qassa_ubuntu**
+
+If you got a build, a ZIP, or a "repack" from anywhere else — a Telegram
+channel, a file host, a mirror, a fork under a different name — treat it as
+untrusted and verify it before you flash it.
+
+Why this matters: a headless server image is an attractive target. A modified
+build can ship a crypto miner, a hidden reverse shell, or a tracker, and the
+device still boots and behaves normally. It just runs hot, drains battery, and
+sends traffic you never asked for. The `vps-setup/` components are published
+under a strict source-available license — see
+[vps-setup/LICENSE](vps-setup/LICENSE) — specifically so that repacks like that
+are not permitted.
+
+Before flashing anything you did not build yourself:
+
+- Check the commit hash against this repository.
+- Check the SHA256 of the ZIP against the release notes.
+- Read `vps-setup/`. It is small, and it is the part that runs as root.
+
+---
+
 ## What this is, and what it is not
 
 | | |
@@ -49,7 +105,7 @@ Redmi 4X.
 
 ![Windows PowerShell over SSH into the device, neofetch showing Ubuntu 22.04 on kernel 4.9.257, next to the Redmi 4X About phone screen](docs/screenshots/ssh-ubuntu-2204.jpg)
 
-A Windows PowerShell session on the LAN, `ssh root@192.168.110.171`, running
+A Windows PowerShell session on the LAN, `ssh root@<device-ip>`, running
 `neofetch` inside the chroot. The phone is on the desk beside it, powered over
 USB with the charge LED on.
 
@@ -383,14 +439,14 @@ adb shell id                      # uid=0(root)
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 # 3. note the IP the script prints, then move to Wi-Fi ADB
-adb connect 192.168.1.50:5555
-echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
+adb connect <device-ip>:5555
+echo 'santoniadmin' | adb -s <device-ip>:5555 shell id
 
 # 4. vps-setup already set a random root password and printed it
 #    (it is also in /data/ubuntu_root_pass if you missed it)
 
 # 5. from any machine on the LAN
-ssh root@192.168.1.50
+ssh root@<device-ip>
 ```
 
 Steps 1-2 need the cable. After step 2 the device is self-sufficient: it
@@ -439,8 +495,8 @@ adb devices
 adb shell
 
 # Over Wi-Fi, once the device is on the network
-adb connect 192.168.1.50:5555
-adb -s 192.168.1.50:5555 shell
+adb connect <device-ip>:5555
+adb -s <device-ip>:5555 shell
 ```
 
 > **Debug-phase access only.** `ro.adb.secure=0` and `ro.secure=0` mean anyone
@@ -474,7 +530,7 @@ adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_w
 Scripted access over Wi-Fi is gated too, so feed the password on stdin:
 
 ```bash
-echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
+echo 'santoniadmin' | adb -s <device-ip>:5555 shell getprop ro.product.model
 ```
 
 > **Requires the adb patch.** AOSP hard-codes the adb shell to
@@ -499,8 +555,8 @@ The file is read on every Wi-Fi session, so no reboot is needed. Check that the
 new value is accepted and the old one is not:
 
 ```bash
-echo 'my-new-password' | adb -s 192.168.1.50:5555 shell id   # works
-echo 'santoniadmin'    | adb -s 192.168.1.50:5555 shell id   # 3 tries, then closed
+echo 'my-new-password' | adb -s <device-ip>:5555 shell id   # works
+echo 'santoniadmin'    | adb -s <device-ip>:5555 shell id   # 3 tries, then closed
 ```
 
 Forgot it? Delete the file over USB and the default `santoniadmin` comes back.
