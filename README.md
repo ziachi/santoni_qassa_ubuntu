@@ -1,9 +1,14 @@
-# Qassa ROM — Xiaomi Redmi 4X (santoni)
+# santoni — headless Ubuntu 22.04 VPS
 
-> **keepQASSA Sisu v2.4_0.s** (Android 10) — Unofficial build for santoni.
-> Vanilla, custom signed, with XiaomiAddon & GCam preinstalled.
+> An Android 10 base (keepQASSA Sisu v2.4_0.s) stripped down to a headless
+> server, with an Ubuntu 22.04 chroot that comes up on every boot and sshd
+> reachable over the LAN. No Android UI, no launcher, no display server.
 
-> im just rebuild the rom the source devicetree it self already clean. 
+This is **not** a phone ROM and it is **not** vanilla keepQASSA. The Android
+side exists only to boot the kernel, bring up Wi-Fi and host the chroot. 37 UI
+APKs are removed from the image, Zygote and SurfaceFlinger are stopped at boot,
+and the backlight is turned off. What you get is a 24/7 arm64 Linux box on a
+Redmi 4X.
 
 ---
 
@@ -11,23 +16,150 @@
 
 | Key | Value |
 |-----|-------|
-| **ROM** | keepQASSA Sisu v2.4_0.s (Android 10) |
+| **What it is** | Headless Ubuntu 22.04 VPS on Android 10 |
+| **Base** | keepQASSA Sisu v2.4_0.s (Android 10 / Q) |
 | **Device** | Xiaomi Redmi 4X (santoni) |
 | **SoC** | Qualcomm MSM8937 (Snapdragon 435) |
 | **Lunch** | `qassa_santoni-userdebug` |
-| **Build command** | `mka qassa -j$(nproc)` |
+| **Build command** | `mka installclean && mka qassa` |
 | **Build type** | UNOFFICIAL |
+| **Current release** | [`v1.1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1.1) — `0a809b0` |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
-| **SELinux** | Permissive (headless VPS build, see Hard Rule #2) |
-| **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.228 arm64 |
+| **SELinux** | Permissive (required by the chroot, see Hard Rule #2) |
+| **Kernel** | Luuvy C.4.0.eol202601 — prebuilt, Linux 4.9.257 arm64 |
 | **Manifest** | `https://github.com/keepQASSA/manifest.git` branch `Q` |
 | **Maintainer** | [@kalomakan](https://t.me/kalomakan) / [ziachi](https://github.com/ziachi) |
 
 ---
 
+## Default Credentials & First-Time Login
+
+Every account below ships with a **known default password**, so a fresh install
+is reachable without a console. Change all of them on first login.
+
+| Account | Where | Default password | Change it with |
+|---|---|---|---|
+| `root` — Ubuntu chroot, SSH port 22 | `ssh root@<device-ip>` | `santoniadmin` | `passwd` |
+| `ubuntu` — non-root, `sudo` NOPASSWD | `ssh ubuntu@<device-ip>` | `ubuntu` | `passwd` |
+| ADB over Wi-Fi, port 5555 | `adb -s <device-ip>:5555 shell` | `santoniadmin` | see below |
+
+```bash
+# root and ubuntu, over SSH
+ssh root@<device-ip>   'passwd'
+ssh ubuntu@<device-ip> 'passwd'
+
+# ADB over Wi-Fi — change it over USB, where no password is needed
+adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
+```
+
+`vps-setup` accepts `UBUNTU_ROOT_PASS` to override the root default at install
+time, and writes the value to `/data/ubuntu_root_pass` (mode 600) so it stays
+discoverable over USB.
+
+> **Do not leave these defaults in place on a device reachable from a network
+> you do not control.** Port 5555 is a root shell and port 22 is root SSH. The
+> defaults exist so the first login works, not so they can stay.
+
+---
+
+## ⚠️ Security Notice & Official Source
+
+The only official source for this project is:
+
+**https://github.com/ziachi/santoni_qassa_ubuntu**
+
+If you got a build, a ZIP, or a "repack" from anywhere else — a Telegram
+channel, a file host, a mirror, a fork under a different name — treat it as
+untrusted and verify it before you flash it.
+
+Why this matters: a headless server image is an attractive target. A modified
+build can ship a crypto miner, a hidden reverse shell, or a tracker, and the
+device still boots and behaves normally. It just runs hot, drains battery, and
+sends traffic you never asked for. The `vps-setup/` components are published
+under a strict source-available license — see
+[vps-setup/LICENSE](vps-setup/LICENSE) — specifically so that repacks like that
+are not permitted.
+
+Before flashing anything you did not build yourself:
+
+- Check the commit hash against this repository.
+- Check the SHA256 of the ZIP against the release notes.
+- Read `vps-setup/`. It is small, and it is the part that runs as root.
+
+---
+
+## What this is, and what it is not
+
+| | |
+|---|---|
+| **Is** | A headless arm64 Linux server. Ubuntu 22.04 in a chroot at `/data/ubuntu`, sshd on port 22, Wi-Fi managed without the Android framework. |
+| **Is** | Debloated. 37 APKs that only exist to draw something are removed from the image, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME`, `GCam` and `XiaomiAddon`. |
+| **Is** | Custom signed, SELinux permissive, ADB as root over USB and Wi-Fi. |
+| **Is not** | A daily-driver phone ROM. There is no launcher, no status bar, no camera app, no dialer. |
+| **Is not** | Vanilla keepQASSA. The device tree, the boot script, the Wi-Fi path and the package list are all modified. |
+| **Is not** | A container host. The kernel has no PID/UTS/IPC/USER namespaces, so Docker, LXC and podman cannot run. Plain `chroot` is fully supported. |
+
+---
+
+## Proof
+
+![Windows PowerShell over SSH into the device, neofetch showing Ubuntu 22.04 on kernel 4.9.257, next to the Redmi 4X About phone screen](docs/screenshots/ssh-ubuntu-2204.jpg)
+
+A Windows PowerShell session on the LAN, `ssh root@<device-ip>`, running
+`neofetch` inside the chroot. The phone is on the desk beside it, powered over
+USB with the charge LED on.
+
+| Field | Value |
+|---|---|
+| Kernel | `4.9.257-Luuvy-Checkmate-B.4.0.Lesion.EOL202601 aarch64` |
+| OS | Ubuntu 22.04 LTS aarch64 |
+| Host | Qualcomm MSM8940-PMI8950 QRD SKU7 |
+| CPU | Qualcomm MSM8940 (8) @ 1.401GHz |
+| Memory | 850MiB / 1817MiB |
+| Packages | 274 (dpkg) |
+| Shell | bash 5.1.16 |
+| Terminal | `/dev/pts/0` |
+| Device | Xiaomi Redmi 4X — MSM8937, Adreno 505, 5.0" 720x1280 IPS |
+
+`/dev/pts/0` is the line worth reading twice. It means the session got a real
+pty, which is the v31 devpts fix working: a chroot without devpts mounted
+cannot allocate one, and `ssh -tt` fails with
+`PTY allocation request failed on channel 0` even though the password was
+accepted.
+
+The panel on the right is the device's own `About phone` screen, included for
+the hardware summary. It reports `MSM8937` where the kernel reports `MSM8940`;
+both are the same Snapdragon 435 family, and the device tree targets `msm8937`.
+
+### Idle footprint
+
+![htop inside the chroot on an idle device: 94 tasks, 170M of 1.77G used, no zygote and no system_server](docs/screenshots/htop-idle.png)
+
+`htop` inside the chroot, 31 minutes after boot, with nothing running. The
+process list is the Android host's, not the chroot's — a chroot shares the PID
+namespace, so `htop` sees `init`, `vold`, `netd` and the HAL services.
+
+What matters is what is **not** in the list: no `zygote`, no `system_server`,
+no `app_process`, no `com.android.*`. The framework is stopped, which is the
+whole point of this build.
+
+| Field | Value |
+|---|---|
+| Uptime | 00:31:13 |
+| Tasks | 94, 321 threads, 1 running |
+| Memory | 170M / 1.77G |
+| Swap | 101M / 2.00G |
+| Load average | 3.24 3.10 2.86 |
+| CPU | 7 of 8 cores at 0.0%, one at 3.2% |
+
+The load average looks high next to an idle CPU. Load average counts processes
+in uninterruptible sleep as well as runnable ones, and the Android HAL services
+sit in that state; the CPU bars are the honest number for actual work.
+
 ## Repository Map
 
-All custom repos for this ROM. Clone each into the matching path inside the Qassa source tree.
+All custom repos for this build. Clone each into the matching path inside the
+Qassa source tree.
 
 ```
 ~/qassa/                                    <- ROM source root
@@ -87,6 +219,12 @@ source ~/.bashrc
 ccache -M 40G
 ```
 
+> On Ubuntu 24.04 the package names differ: `lib32ncurses5-dev` becomes
+> `lib32ncurses-dev`, `libncurses5-dev` becomes `libncurses-dev`, and
+> `libncurses5` does not exist (only `libncurses6`). The prebuilt clang still
+> needs `libncurses.so.5`, so install the bionic debs from
+> `archive.ubuntu.com/ubuntu/pool/main/n/ncurses/` and run `sudo ldconfig`.
+
 ### Step 1: Initialize ROM Source
 
 ```bash
@@ -144,6 +282,9 @@ ls -lh prebuilt/x86_64/webview.apk
 cd ~/qassa
 ```
 
+> `external/chromium-webview` is split into five sub-repos by the keepQASSA
+> manifest. Run `git lfs pull` inside each `prebuilt/*`, not in the parent.
+
 ### Step 4: Setup Signing Keys
 
 Generate your own keys if you don't have the maintainer's keys:
@@ -172,13 +313,13 @@ mka qassa -j$(nproc)
 
 > First build: ~4-8 hours (6-core). Subsequent builds with ccache: ~1-3 hours.
 >
-> Output: `out/target/product/santoni/qassa_Sisu-*.zip`
+> Output: `out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip`
 
 ### Step 6: Flash
 
 ```bash
 # Boot into TWRP recovery, then sideload:
-adb sideload out/target/product/santoni/qassa_Sisu-*.zip
+adb sideload out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip
 
 # OR copy ZIP to device and flash from TWRP file manager
 ```
@@ -203,30 +344,87 @@ tail -f /tmp/build.log          # monitor
 grep -i "error\|fail" /tmp/build.log  # check errors
 ```
 
+> `lunch` must not be piped. `lunch ... | tail -3` runs it in a subshell, so
+> `TARGET_PRODUCT` never reaches the parent shell, `VendorVars` in
+> `out/soong/soong.variables` ends up empty, and Soong dies with
+> `unknown variable '$(PATH_OVERRIDE_SOONG)'`. Redirect instead:
+> `lunch ... >/dev/null 2>&1`.
+
 ---
 
-## What's Included
+## What is in the image
 
-### Prebuilt Apps
-| App | Path | Description |
+### Shipped
+
+| Item | Path | Description |
 |-----|------|-------------|
-| GCam | `GCam/Camera.apk` | Google Camera |
-| XiaomiAddon | `XiaomiAddon/` | KCal display, USB Fast Charge, QS tiles |
+| BusyBox | `busybox/busybox` | static aarch64 1.37.0 — `udhcpc` and `wget` |
+| `curl` | built from `external/curl` | HTTPS downloader for `vps-setup` |
+| `wifi` | `wifi/wifi.sh` | `wpa_cli` + `udhcpc` front-end |
+| `vps-setup` | `vps-setup/vps-setup.sh` | one-command Wi-Fi + Ubuntu install |
+| `ubuntu-enter` | `ubuntu-enter/` | adb shell wrapper with the Wi-Fi password gate |
+| `init.ubuntu.sh` | `rootdir/init.ubuntu.sh` | boot script, installed to `/system/bin` |
+| `init.ubuntu.rc` | `rootdir/init.ubuntu.rc` | init service, installed to `/system/etc/init` |
+| `webcam_bridge` | `webcam-bridge/` | Camera2 NDK to MJPEG |
+| `sensor_bridge` | `sensor-bridge/` | `ASensorManager` to a log file |
+| `pulse-default.pa` | `audio-bridge/` | PulseAudio config only |
 
-### Device Features
-- ADB enabled by default (headless/automation access)
-- Custom signed with releasekey
-- SELinux permissive (headless VPS build)
-- Maintainer info embedded in build.prop
-- Ubuntu chroot auto-start: `init.ubuntu.sh` in `/system/bin`, `init.ubuntu.rc` in `/system/etc/init`
-- Bridge binaries: `webcam_bridge`, `sensor_bridge`, `pulse-default.pa`
+### Removed from the image
+
+37 APKs are dropped through `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages`
+stub in `prebuilts/Android.mk`. The list covers every APK that only exists to
+draw something for a human:
+
+```
+Aperture AudioFX Calendar Contacts DeskClock Dialer DocumentsUI
+DownloadProviderUi EasterEgg EmergencyInfo ExactCalculator FMRadio Gallery2
+GamingMode GCam Launcher3 Launcher3QuickStep LatinIME LiveWallpapersPicker
+MatLog messaging MusicFX OneTimeInitializer PowerOffAlarm Provision Settings
+SettingsIntelligence ShadyQuickStep SoundPickerPrebuilt StorageManager
+SystemUI VpnDialogs WallpaperBackup WallpaperCropper WallpaperPicker2
+XiaomiAddon XiaomiParts
+```
+
+`GCam` and `XiaomiAddon` are on that list. They are **not** in the image — a
+headless build has no UI to show them in, and Zygote is stopped at boot so they
+could never run.
+
+Deliberately kept: `framework-res`, `telephony-common`, `WcnssService`, the
+providers (`SettingsProvider`, `MediaProvider`, `TelephonyProvider`, ...), the
+telephony/modem stack (`TeleService`, `Telecom`, `ims`, `qcrilmsgtunnel`, `Stk`,
+`MmsService`, `CellBroadcastReceiver`) and the network services
+(`InProcessNetworkStack`, `SoftAPManager`, `WfdService`, `OsuLogin`,
+`PlatformCaptivePortalLogin`).
+
+### Why the `PRODUCT_PACKAGES` filter-out is gone
+
+`qassa_santoni.mk` used to strip the UI with
+`PRODUCT_PACKAGES := $(filter-out SystemUI Launcher3 ...)`. That never worked.
+`inherit-product` is deferred in this tree (`build/make/core/product.mk:378`):
+it appends a `$(INHERIT_TAG)<path>` marker instead of including the makefile, so
+at that point the variable holds only markers and the filter matches nothing.
+`get_build_var PRODUCT_PACKAGES` still lists `SystemUI`, `Launcher3`,
+`Launcher3QuickStep` and `XiaomiAddon` for that reason.
+
+The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
+in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
+overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
+never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
+
+The stub has to be installed for the override to apply, so `RemovePackages` is
+listed in `PRODUCT_PACKAGES` in `device.mk`. Keep the two lists in sync. A name
+that does not match a module is harmless — the override silently does nothing —
+so the list can be extended without risk.
+
+> `debloat/` is not the debloat mechanism. It holds a single Dolby stub
+> manifest and nothing else.
 
 ---
 
 ## Headless VPS Mode
 
-The ROM is built as a headless server: no Android UI, no display server, no
-boot animation. Everything is driven over ADB.
+The build is a headless server: no Android UI, no display server, no boot
+animation. Everything is driven over ADB, then over SSH.
 
 ### Quick start
 
@@ -241,24 +439,26 @@ adb shell id                      # uid=0(root)
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 # 3. note the IP the script prints, then move to Wi-Fi ADB
-adb connect 192.168.1.50:5555
-echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell id
+adb connect <device-ip>:5555
+echo 'santoniadmin' | adb -s <device-ip>:5555 shell id
 
 # 4. vps-setup already set a random root password and printed it
 #    (it is also in /data/ubuntu_root_pass if you missed it)
 
 # 5. from any machine on the LAN
-ssh root@192.168.1.50
+ssh root@<device-ip>
 ```
 
-Steps 1–2 need the cable. After step 2 the device is self-sufficient: it
-rejoins Wi-Fi and starts Ubuntu on every boot, so steps 3–5 work over the
+Steps 1-2 need the cable. After step 2 the device is self-sufficient: it
+rejoins Wi-Fi and starts Ubuntu on every boot, so steps 3-5 work over the
 network from then on.
 
 | Change | Where |
 |---|---|
 | `androidboot.selinux=permissive` | `BoardConfig.mk` (`BOARD_KERNEL_CMDLINE`) |
-| `SystemUI`, `Launcher3`, `Launcher3QuickStep`, `GCam`, `XiaomiAddon` dropped | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| 37 UI APKs dropped, including `SystemUI`, `Launcher3`, `Settings`, `Contacts`, `Dialer`, `LatinIME`, `GCam`, `XiaomiAddon` | `prebuilts/Android.mk` (`LOCAL_OVERRIDES_PACKAGES` on `RemovePackages`) |
+| `surfaceflinger`, `vendor.hwcomposer-2-1`, `zygote`, `zygote_secondary` stopped at boot, backlight 0 | `rootdir/init.ubuntu.sh` |
+| Wi-Fi through `wpa_cli` + busybox `udhcpc`, no `cmd wifi` / `svc wifi` | `wifi/wifi.sh`, `wifi/udhcpc.script` |
 | `service surfaceflinger` kept enabled | `rootdir/init.target.rc` |
 | `service bootanim` kept enabled, `debug.sf.nobootanimation=1` | `rootdir/init.target.rc`, `qassa_santoni.mk` |
 | ADB over USB without the RSA prompt, ADB over Wi-Fi on 5555 | `qassa_santoni.mk` (`PRODUCT_PROPERTY_OVERRIDES`) |
@@ -278,21 +478,6 @@ so the override lands in the right order.
 > immediately, so nothing is drawn and init still gets its
 > `service.bootanim.exit` handshake.
 
-### Why the `PRODUCT_PACKAGES` filter-out is gone
-
-`qassa_santoni.mk` used to strip the UI with
-`PRODUCT_PACKAGES := $(filter-out SystemUI Launcher3 ...)`. That never worked.
-`inherit-product` is deferred in this tree (`build/make/core/product.mk:378`):
-it appends a `$(INHERIT_TAG)<path>` marker instead of including the makefile, so
-at that point the variable holds only markers and the filter matches nothing.
-`get_build_var PRODUCT_PACKAGES` still lists `SystemUI`, `Launcher3`,
-`Launcher3QuickStep` and `XiaomiAddon` for that reason.
-
-The APKs are removed by `LOCAL_OVERRIDES_PACKAGES` on the `RemovePackages` stub
-in `prebuilts/Android.mk`. `build/make/core/main.mk:1110-1112` filters the
-overridden names out of `PRODUCTS.<mk>.PRODUCT_PACKAGES` before install, so they
-never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
-
 ### ADB Access
 
 | Property | Value | Effect |
@@ -310,8 +495,8 @@ adb devices
 adb shell
 
 # Over Wi-Fi, once the device is on the network
-adb connect 192.168.1.50:5555
-adb -s 192.168.1.50:5555 shell
+adb connect <device-ip>:5555
+adb -s <device-ip>:5555 shell
 ```
 
 > **Debug-phase access only.** `ro.adb.secure=0` and `ro.secure=0` mean anyone
@@ -345,7 +530,7 @@ adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_w
 Scripted access over Wi-Fi is gated too, so feed the password on stdin:
 
 ```bash
-echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
+echo 'santoniadmin' | adb -s <device-ip>:5555 shell getprop ro.product.model
 ```
 
 > **Requires the adb patch.** AOSP hard-codes the adb shell to
@@ -359,8 +544,8 @@ echo 'santoniadmin' | adb -s 192.168.1.50:5555 shell getprop ro.product.model
 
 ### Changing the ADB Wi-Fi password
 
-The password lives in `/data/adb_wifi_pass` (mode 600, owner `root:root`). Change it over USB,
-where no password is required:
+The password lives in `/data/adb_wifi_pass` (mode 600, owner `root:root`).
+Change it over USB, where no password is required:
 
 ```bash
 adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
@@ -370,8 +555,8 @@ The file is read on every Wi-Fi session, so no reboot is needed. Check that the
 new value is accepted and the old one is not:
 
 ```bash
-echo 'my-new-password' | adb -s 192.168.1.50:5555 shell id   # works
-echo 'santoniadmin'    | adb -s 192.168.1.50:5555 shell id   # 3 tries, then closed
+echo 'my-new-password' | adb -s <device-ip>:5555 shell id   # works
+echo 'santoniadmin'    | adb -s <device-ip>:5555 shell id   # 3 tries, then closed
 ```
 
 Forgot it? Delete the file over USB and the default `santoniadmin` comes back.
@@ -389,11 +574,12 @@ Flash the ROM, plug in USB, then run one command:
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 ```
 
-It does seven things:
+It does eight things:
 
-1. `svc wifi enable`, wait for `wpa_supplicant`, then
-   `cmd wifi connect-network <SSID> wpa2 <PASSWORD>` — a backport, Android 10
-   has no such command upstream, see [patches/README.md](patches/README.md)
+1. `/system/bin/wifi connect <SSID> <PASSWORD>` — brings `wlan0` up, starts
+   `wpa_supplicant` when needed, adds the network through `wpa_cli` and saves
+   the credentials to `/data/vps_wifi.conf`. `svc wifi` and `cmd wifi` are not
+   used: both go through `system_server`, which the boot script stops.
 2. wait up to 45s for an IPv4 address on `wlan0`, read with
    `ip -4 addr show wlan0`
 3. download `ubuntu-base-22.04-base-arm64.tar.gz` to `/data/local/tmp/`
@@ -440,17 +626,40 @@ prohibit-password` back.
 
 ### Boot behaviour
 
-`init.ubuntu.rc` starts `vps-boot` on `sys.boot_completed=1`, which runs
-`/vendor/bin/init.ubuntu.sh`:
+`init.ubuntu.rc` starts `vps-boot` from `on boot`, which runs
+`/system/bin/init.ubuntu.sh`:
+
+```sh
+service vps-boot /system/bin/init.ubuntu.sh
+    class late_start
+    user root
+    group root system
+    oneshot
+    disabled
+
+on boot
+    start qrngp
+    start vps-boot
+```
+
+The trigger used to be `on property:sys.boot_completed=1`. That property is only
+set once the framework finishes booting, and on a device with nothing to boot
+for it can stay unset for a long time — the first boot after a data wipe spends
+minutes in dex2oat. `on boot` runs after `/data` is mounted and after Zygote has
+started, which is all this needs. `qrngp` is started explicitly because it
+normally waits on `sys.boot_completed`, which never arrives once Zygote is
+stopped below, and sshd wants the entropy.
 
 | Step | What it does |
 |---|---|
 | Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
+| Headless | `stop surfaceflinger`, `stop vendor.hwcomposer-2-1`, `stop zygote`, `stop zygote_secondary`, then `echo 0 > /sys/class/leds/lcd-backlight/brightness` |
 | Mounts | `rbind` `/dev` + `make-rslave`, devpts only when the rbind did not bring it, then `/proc` and `/sys` |
 | sshd prerequisites | creates `/data/ubuntu/tmp` (1777) and `/data/ubuntu/run/sshd` (0755) |
 | SSH | `chroot /data/ubuntu /usr/sbin/sshd` after `ssh-keygen -A`; the Debian init script behind `service ssh start` expects systemd and fails silently. `/run/sshd.pid` is removed first, because `/run` lives on `/data` and a stale PID there would name an unrelated process |
+| Wi-Fi (background) | launched with `&` once sshd is listening: `ip link set wlan0 up`, `wifi reconnect` when `/data/vps_wifi.conf` exists, `wifi dhcp` to start the udhcpc daemon, then the default route and the chroot's `resolv.conf` |
 
 `/dev` is rbind-mounted rather than bind-mounted because ueventd keeps creating
 nodes after boot; a plain bind would freeze the chroot's view at the moment of
@@ -463,6 +672,25 @@ and busybox is used when the built-in mount understands neither.
 normally just a check — it exists for a device that booted with the old 1 GB
 fstab.
 
+The headless step runs before the Wi-Fi step on purpose. `wificond`'s
+`ClientInterfaceImpl` destructor calls `SetUpState(false)` when its client
+(`system_server`) dies, so stopping Zygote takes `wlan0` down; the Wi-Fi step
+brings it back up and re-selects the saved network afterwards. Joining a network
+before the stop would be undone by `ClientModeImpl`, which disconnects any
+network it does not know about.
+
+The Wi-Fi step itself runs in the background, after sshd is listening. A router
+that is off at boot makes `wifi reconnect` sit through its 20 s supplicant wait
+and its 30 s association wait, and `wait_ip` another 45 s, so running it in the
+foreground would hold the rest of the boot for up to 95 s. sshd does not need
+the network to listen, so the script starts it first, launches the bring-up with
+`&`, and returns. The default route and the chroot's `resolv.conf` are written
+by that background job once the lease arrives, which is also why they are no
+longer part of the chroot section.
+
+`stop` does not fire `onrestart`, so nothing restarts the four services. They
+are `class main`, and `class_start main` only runs once, at boot.
+
 init sends a service's stdout to `/dev/null`, so `adb logcat -s vps-boot` and
 `dmesg | grep vps-boot` both come back empty even when the script ran. The
 script keeps its own log instead, capped at 64 KB:
@@ -474,11 +702,85 @@ adb shell cat /data/ubuntu-boot.log
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
 
-### Hardware bridges (disabled)
+### Wi-Fi helper: `wifi`
 
-Three bridge skeletons live in the device tree. Each ships as
-`Android.bp.disabled` with `enabled: false`, so Soong never parses the directory
-and the build is unchanged until the file is renamed to `Android.bp`.
+`cmd wifi` and `svc wifi` are shell front-ends for `system_server`, and
+`system_server` is stopped at boot. `wifi` is a short front-end for
+`/vendor/bin/wpa_cli` and busybox `udhcpc`, installed to `/system/bin/wifi`:
+
+```sh
+adb root
+adb shell wifi scan
+adb shell wifi connect aeqaeqa <password>
+adb shell wifi status
+adb shell wifi disconnect
+adb shell wifi reconnect
+adb shell wifi dhcp
+adb shell wifi help
+```
+
+| Command | What it does |
+|---|---|
+| `scan` | `wpa_cli scan` then `scan_results`; raw `bssid / frequency / signal level / flags / ssid` lines |
+| `connect <ssid> [pw]` | brings `wlan0` up, starts `wpa_supplicant` when needed, adds the network, waits for `wpa_state=COMPLETED`, saves the credentials, starts the udhcpc daemon and prints the IP |
+| `reconnect` | the same, using `/data/vps_wifi.conf` |
+| `disconnect` | `wpa_cli disconnect`, then flushes the address |
+| `status` | `wpa_cli status` plus the IPv4 address |
+| `dhcp` | starts the udhcpc daemon when it is not already running |
+
+All of it needs root, so run `adb root` first.
+
+`wpa_supplicant` runs without `-c`, so it has no config file and `save_config`
+has nowhere to write. `connect` therefore keeps the credentials in
+`/data/vps_wifi.conf` (0600), and `init.ubuntu.sh` replays them on every boot.
+
+The lease is renewed by `busybox udhcpc` in daemon mode, with
+`/system/bin/udhcpc.script` as the hook. The hook never flushes the address, so
+a renewal that fails leaves the device reachable on its old address instead of
+taking it off the network.
+
+`wifi dhcp` treats `/data/udhcpc.wlan0.pid` as a hint, not a fact: `/data`
+survives a reboot, so the PID in a stale file can belong to an unrelated
+process. It reads `/proc/<pid>/cmdline` and only skips the start when that
+process really is `udhcpc`.
+
+Inside the chroot the same CLI is available as `/usr/local/bin/wifi`. It chroots
+back into Android's root, so `/proc` has to be mounted — the boot script does
+that.
+
+The `WifiShellCommand` backports in `patches/` are no longer used by anything.
+They stay in the tree because they are harmless.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `wifi: add_network failed` | `wpa_supplicant` is not running, or `/vendor/bin/wpa_cli` is missing from the image | `adb shell getprop init.svc.wpa_supplicant` must print `running`; `wpa_cli` needs a build that lists it in `PRODUCT_PACKAGES` |
+| `wifi: no /data/vps_wifi.conf, run 'wifi connect'` | the device has never joined a network, so the boot script has nothing to replay | `adb shell wifi connect <ssid> <password>` once; the file is written from then on |
+| `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
+| `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
+| Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
+| `vps-setup` prints `/bin/sh: 1: apt-get: not found` | the chroot inherited Android's `PATH`, which has no `/usr/bin` | fixed in #52; on an older build run `chroot /data/ubuntu /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; apt-get update && apt-get install -y openssh-server'` |
+| `bash: groups: command not found` inside the chroot | `/etc/profile` in ubuntu-base sets `PS1` but not `PATH`, so the chroot keeps Android's `PATH` | fixed in #53; on an older build run `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |
+| `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot is unmarked, so it uses the main routing table, which on Android holds only the local subnet plus an `unreachable default` | fixed in #53; `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main table. To repair a running device: `ip route add default via <gateway> dev wlan0` |
+| `chpasswd` exits 0 but the password is still rejected | PAM inside the chroot cannot complete the change, so nothing is written to `/etc/shadow` | write the hash directly, which skips PAM: `adb shell "chroot /data/ubuntu /usr/sbin/usermod -p '<sha512-crypt-hash>' root"`. Keep the single quotes and do not wrap this in `bash -c`: the hash contains `$`, and a second parse expands `$6`, `$salt` and the leading part of the digest, storing a truncated string that no password can match. Generate the hash with `openssl passwd -6 -salt santoni <password>` |
+| SSH still rejects a correct password after the hash is in `/etc/shadow` | PAM inside the chroot cannot complete authentication, usually because `/dev` or `/proc` is not mounted, so `pam_unix` and `pam_loginuid` fail | set `UsePAM no` in `/etc/ssh/sshd_config` and restart sshd; it then compares the password itself with `crypt()` and loads no PAM modules. Confirm the account is not locked with `chroot /data/ubuntu /usr/bin/passwd -S root`, which prints `P` for a usable password |
+| SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin | /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
+| SSH says `Connection refused` after a reboot | sshd never started. On builds before `c82969e` the boot script used `service ssh start`, and `start-stop-daemon` skips the start when `/run/sshd.pid` still names a live PID; `--oknodo` then hides the failure and the log still says `sshd started` | rebuild with `c82969e` or later. On a running device: `adb shell "rm -f /data/ubuntu/run/sshd.pid; chroot /data/ubuntu /usr/sbin/sshd"` |
+| `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
+| `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
+| `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
+| `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
+| `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
+| `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
+
+---
+
+## Hardware bridges
+
+Three bridges live in the device tree and are **built into the image**. They are
+Android-side helpers that expose hardware the chroot cannot reach on its own.
 
 #### `webcam-bridge` — camera
 
@@ -500,58 +802,7 @@ tree; the config fails to load until they are installed in the chroot.
 `/dev/input` directly would split the evdev queue with `system_server`. The log
 is append-only and never rotated.
 
-### Wi-Fi helper: `wifi`
-
-`cmd wifi` on Android 10 has no scan, disconnect or status, and the raw
-commands are long enough to wrap in a CMD window. `wifi` is a short front-end
-installed to `/system/bin/wifi`:
-
-```sh
-adb root
-adb shell wifi scan
-adb shell wifi connect aeqaeqa <password>
-adb shell wifi status
-adb shell wifi disconnect
-adb shell wifi help
-```
-
-`wifi scan` prints one line per network, strongest first:
-
-```
-aeqaeqa            -45 dBm  WPA2
-IndiHome-1234      -72 dBm  WPA2
-```
-
-`wifi connect` enables the radio, waits for `wpa_supplicant`, joins the network
-and prints the address it got. `wifi status` prints the ssid, the signal and
-the IP. All of it needs root, so run `adb root` first.
-
-The scan, disconnect and status commands come from
-[patches/apply-wifi-scan.py](patches/apply-wifi-scan.py), which adds them to
-`WifiShellCommand` the same way `connect-network` was added.
-
-### Troubleshooting
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
-| `Unknown command: connect-network` | the build predates the Android 10 backport | apply `patches/apply-wifi-connect-network.py` and rebuild |
-| `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
-| `adb connect` → `connection refused` | adbd not listening yet, or wrong IP | `adb shell getprop service.adb.tcp.port` must be `5555`; read the IP with `adb shell ip -4 addr show wlan0` |
-| Wi-Fi ADB asks for a password you do not know | `/data/adb_wifi_pass` was changed | over USB: `adb shell cat /data/adb_wifi_pass`, or delete the file to fall back to `santoniadmin` |
-| `vps-setup` prints `/bin/sh: 1: apt-get: not found` | the chroot inherited Android's `PATH`, which has no `/usr/bin` | fixed in #52; on an older build run `chroot /data/ubuntu /bin/sh -c 'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; apt-get update && apt-get install -y openssh-server'` |
-| `bash: groups: command not found` inside the chroot | `/etc/profile` in ubuntu-base sets `PS1` but not `PATH`, so the chroot keeps Android's `PATH` | fixed in #53; on an older build run `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |
-| `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot is unmarked, so it uses the main routing table, which on Android holds only the local subnet plus an `unreachable default` | fixed in #53; `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main table. To repair a running device: `ip route add default via <gateway> dev wlan0` |
-| `chpasswd` exits 0 but the password is still rejected | PAM inside the chroot cannot complete the change, so nothing is written to `/etc/shadow` | write the hash directly, which skips PAM: `adb shell "chroot /data/ubuntu /usr/sbin/usermod -p '<sha512-crypt-hash>' root"`. Keep the single quotes and do not wrap this in `bash -c`: the hash contains `$`, and a second parse expands `$6`, `$salt` and the leading part of the digest, storing a truncated string that no password can match. Generate the hash with `openssl passwd -6 -salt santoni <password>` |
-| SSH still rejects a correct password after the hash is in `/etc/shadow` | PAM inside the chroot cannot complete authentication, usually because `/dev` or `/proc` is not mounted, so `pam_unix` and `pam_loginuid` fail | set `UsePAM no` in `/etc/ssh/sshd_config` and restart sshd; it then compares the password itself with `crypt()` and loads no PAM modules. Confirm the account is not locked with `chroot /data/ubuntu /usr/bin/passwd -S root`, which prints `P` for a usable password |
-| SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin | /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
-| SSH says `Connection refused` after a reboot | sshd never started. On builds before `c82969e` the boot script used `service ssh start`, and `start-stop-daemon` skips the start when `/run/sshd.pid` still names a live PID; `--oknodo` then hides the failure and the log still says `sshd started` | rebuild with `c82969e` or later. On a running device: `adb shell "rm -f /data/ubuntu/run/sshd.pid; chroot /data/ubuntu /usr/sbin/sshd"` |
-| `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
-| `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
-| `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
-| `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
-| `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
-| `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
+---
 
 ## Kernel Capability Check
 
@@ -577,18 +828,18 @@ Also absent, container-only: `CONFIG_PID_NS`, `CONFIG_UTS_NS`, `CONFIG_IPC_NS`,
 `CONFIG_BINFMT_MISC`. **Docker / LXC / podman cannot run on this kernel.**
 Plain `chroot` is fully supported.
 
+> The kernel is a **prebuilt binary**, not built from this tree. The
+> `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output. To
+> change a kernel option you need a new `Image.gz-dtb` from the Luuvy
+> maintainer — the source is not public.
+
+---
+
 ## Known Issues & Fixes
 
-| # | Issue | Status | Fix |
-|---|-------|--------|-----|
-| 6 | allocator@3.0 bootloop (MSM8937) | Fixed | Remove `<version>3.0</version>` from manifest.xml |
-| 8 | Privapp-permissions bootloop | Fixed | Added whitelist XML for all privapps |
-| 10 | Calendar crash (startService from bg) | Fixed | Debloated via Android.bp overlay |
-| 11 | GameSpace crash | Fixed | Debloated via Android.bp overlay |
-| 15 | SELinux memtrack/libutils denials | Fixed | dontaudit + allow rules |
-| 15 | Vibrator haptic type 2 error | Fixed | Overlay `config_enableHapticTextHandle=false` |
-| 17 | Dolby remnants in device tree | Fixed | Removed all Dolby refs |
-| 22 | Android Override integrated | Fixed | Removed all Override hooks + app |
+Every fixed issue is written up in [CHANGELOG.md](CHANGELOG.md) with its
+Problem / Fix / Files / Impact. Runtime symptoms that are still worth knowing
+about are in [Troubleshooting](#troubleshooting) above.
 
 ### Common Build Errors
 
@@ -598,6 +849,9 @@ Plain `chroot` is fully supported.
 | Soong build error after .mk change | `rm -rf out/soong/.bootstrap` |
 | Disk full during build | `mka installclean` or `mka clean` |
 | Jack server OOM | `export JACK_SERVER_VM_ARGUMENTS="-Xmx4g"` |
+| `clang.real: error while loading shared libraries: libncurses.so.5` | install the bionic `libncurses5` / `libtinfo5` debs, then `sudo ldconfig` |
+| `ccache: error: Could not find compiler "clang" in PATH` | `TARGET_KERNEL_CLANG_VERSION` points at a `zyc_clang` that does not exist; use `clang-r353983c1` |
+| `MODULE.TARGET.ETC.init.ubuntu.rc already defined` | `init.ubuntu.rc` / `init.ubuntu.sh` are already defined in `rootdir/Android.mk`; do not add a second module |
 
 ---
 
@@ -609,7 +863,7 @@ Plain `chroot` is fully supported.
 |---|------|
 | 1 | **NEVER `git push --force`** — History is sacred, no exceptions |
 | 2 | **SELinux is Permissive for the headless VPS build** — `androidboot.selinux=permissive` in `BoardConfig.mk`. This supersedes the old "always Enforcing" rule; the Ubuntu chroot needs it. Revert to Enforcing only for a phone build. |
-| 3 | **1 fix = 1 commit** — Format: `[vN] santoni: description (#N)` |
+| 3 | **1 fix = 1 commit** — Imperative subject, no `[vN]` prefix: `mount devpts in the chroot so sshd can allocate a pty` |
 | 4 | **Commit body must include:** Problem / Fix / Files / Impact |
 | 5 | **Don't mix Matrixx patterns with Qassa** — Different ROM, different codebase |
 | 6 | **Don't auto-build** — Wait for explicit "gas build" from maintainer |
@@ -621,10 +875,13 @@ Plain `chroot` is fully supported.
 
 ## For AI Agents
 
-If you are an AI agent (Viktor, Cursor, Copilot, etc.) continuing work on this project, read this section carefully.
+If you are an AI agent (Viktor, Cursor, Copilot, etc.) continuing work on this
+project, read this section carefully.
 
 ### Project Context
-- This is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
+- Base is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
+- The build is a **headless Ubuntu VPS**, not a phone ROM — do not add UI
+  packages back, and do not treat a missing launcher as a bug
 - Build system: standard AOSP Make (`mka`)
 - ROM manifest: `https://github.com/keepQASSA/manifest.git` branch `Q`
 - Source tree synced with `repo sync --depth=1` (shallow clones)
@@ -642,12 +899,12 @@ mka qassa -j$(nproc)
 
 | Task | How |
 |------|-----|
-| Add prebuilt app | Put APK + Android.mk in `device/xiaomi/santoni/<AppName>/`, add to device.mk PRODUCT_PACKAGES |
-| Change build prop | Edit `system.prop` or `qassa_santoni.mk` PRODUCT_PROPERTY_OVERRIDES |
-| Fix SELinux denial | Add rules to `sepolicy/vendor/`. The headless VPS build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
-| Debloat system app | Add entry to `debloat/Android.bp` |
-| Add overlay | Put XML in `overlay/` or `overlay-lineage/` |
-| Update kernel config | Not applicable — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
+| Remove another APK from the image | add its module name to `LOCAL_OVERRIDES_PACKAGES` in `prebuilts/Android.mk` |
+| Change build prop | edit `system.prop` or `qassa_santoni.mk` `PRODUCT_PROPERTY_OVERRIDES` |
+| Fix SELinux denial | add rules to `sepolicy/vendor/`. The headless build runs permissive (Hard Rule #2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
+| Add overlay | put XML in `overlay/` or `overlay-lineage/` |
+| Change kernel config | not possible from this tree — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
+| Change boot behaviour | `rootdir/init.ubuntu.sh` (script) and `rootdir/init.ubuntu.rc` (service) |
 
 ### Disk Management
 The `out/` directory grows to 200GB+. Always check `df -h` before building.
@@ -664,7 +921,7 @@ git config --global commit.gpgsign true
 ### Commit Workflow
 1. Make changes
 2. Test build compiles (or get maintainer approval to skip)
-3. Commit with format: `[vN] santoni: description (#N)`
+3. Commit with an imperative subject line, no `[vN]` prefix
 4. Include in commit body: Problem / Fix / Files / Impact
 5. Update README.md and CHANGELOG.md
 6. Push (never force push)
@@ -673,56 +930,16 @@ git config --global commit.gpgsign true
 
 ## Commit History
 
-See [CHANGELOG.md](CHANGELOG.md) for full history.
+Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
+Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-| # | Version | Hash | Change |
-|---|---------|------|--------|
-| 42 | v22 | - | Fix 5 documentation bugs and script step labels |
-| 41 | v22 | e4e1218 | Re-enable the ADB over Wi-Fi password gate |
-| 40 | v22 | de32ed6 | sensor-bridge skeleton — ASensorManager to /data/ubuntu/tmp |
-| 39 | v22 | e20515e | audio-bridge skeleton — PulseAudio over OpenSL ES |
-| 38 | v22 | b77a14f | webcam-bridge skeleton — Camera2 NDK to MJPEG |
-| 37 | v22 | 01bf948 | rbind /dev into the chroot, install sshd, open debug access |
-| 36 | v22 | 37e5a28 | restore surfaceflinger and verify minimal headless packages |
-| 35 | v21 | cdc76d5 | Create /data/adb_wifi_pass on first boot |
-| 34 | v21 | 79bf7e9 | Point docs at the working repo |
-| 33 | v21 | c2a13e3 | Operational guide — quick start, password, troubleshooting |
-| 32 | v21 | 7beb938 | Auto-start Ubuntu, wake lock, ZRAM 2 GB |
-| 31 | v21 | 552ab0c | vps-setup first-run installer |
-| 30 | v21 | 9d13e81 | Dual-auth login shell ubuntu-enter |
-| 29 | v21 | 0acc93c | ADB over USB without signature + Wi-Fi 5555 |
-| 28 | v21 | 4d8f288 | Headless mode + SELinux permissive |
-| 27 | v21 | e5f8c85 | Verify kernel config for chroot VPS |
-| 26 | v21 | 8f96ca1 | Use prebuilt Luuvy kernel |
-| 25 | v20 | 28593f0 | Remove incorrect credit from README |
-| 24 | v20 | d14747c | Update README + CHANGELOG for release |
-| 23 | v20 | 2e0ceda | Add Spectrum kernel profile to XiaomiAddon |
-| 22 | v19 | 727c886 | Fix PinnerService path for flattened APEX |
-| 21 | v18 | c687798 | Fix PinnerService APEX path for Android 10 |
-| 20 | v17 | cfbf6ba | Complete Dolby removal from device tree |
-| 19 | v16 | 3f69e6d | Update README — comprehensive setup guide |
-| 18 | v16 | 32160a3 | Remove Android Override integration |
-| 17 | v15 | df886c1 | Fix README — separate device tree vs override bugs |
-| 16 | v15 | fc1ceaa | Update README + CHANGELOG |
-| 15 | v15 | ae7f47a | Build deps fix + device info overlay |
-| 14 | v15 | ac19f79 | Add Spectrum kernel manager + OverrideSettings SEPolicy |
-| 13 | v15 | aa0fc5d | Remove Dolby from device tree |
-| 12 | v15 | 60526f3 | SEPolicy cleanup — remove non-existent types |
-| 11 | - | 0a1ca39 | Fix 6 bugs from V14 logcat analysis |
-| 10 | - | d3098f2 | Add bug analysis docs + update README |
-| 9 | - | 4032e6f | Fix privapp-permissions bootloop |
-| 8 | - | 34e7353 | Fix credits description |
-| 7 | - | 03332ae | Fix allocator@3.0 bootloop + update docs |
-| 6 | - | 1a9ad2c | Revamp README.md to match Matrixx quality |
-| 5 | - | 392348c | Adapt session rules: add CHANGELOG.md + update README |
-| 4 | - | 172d3f8 | Add ziachi maintainer customizations |
-| 3 | - | cbca51a | Add custom releasetools with credit injection |
-| 2 | - | e187228 | Fix dex2oat duplicate compiler filter crash |
-| 1 | - | db62dda | Update defconfig |
+Current head: `0a809b0` (v33), released as
+[`v1.1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1.1).
 
 ---
 
 ## Credits
 
 - [omansh-krishn](https://github.com/omansh-krishn) — original keepQASSA device tree for santoni
-- [ziachi](https://github.com/ziachi) — santoni port, customizations, bug fixes
+- [ziachi](https://github.com/ziachi) — santoni port, headless VPS conversion, customizations, bug fixes
+- Luuvy — the prebuilt kernel (`C.4.0.eol202601`)
