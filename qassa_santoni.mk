@@ -134,3 +134,28 @@ PRODUCT_PACKAGES += \
 
 # Signing with releasekey
 PRODUCT_DEFAULT_DEV_CERTIFICATE := vendor/ziachi-keys/releasekey
+
+# vps-setup/rootdir is the chroot overlay applied by vps-setup/apply.sh: the
+# systemctl replacement, the sshd wrapper that re-establishes the suid bind
+# mounts on every boot, policy-rc.d, the runlevel shim, the journalctl
+# wrapper, and the sudoers/locale/editor defaults. Installed under
+# /system/etc/vps-setup so vps-setup.sh can copy it into the chroot without a
+# network round trip.
+PRODUCT_COPY_FILES += \
+    device/xiaomi/santoni/vps-setup/apply.sh:system/etc/vps-setup/apply.sh \
+    device/xiaomi/santoni/vps-setup/packages.list:system/etc/vps-setup/packages.list \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/sbin/policy-rc.d:system/etc/vps-setup/rootdir/usr/sbin/policy-rc.d \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/sbin/runlevel:system/etc/vps-setup/rootdir/usr/sbin/runlevel \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/sbin/sshd:system/etc/vps-setup/rootdir/usr/sbin/sshd \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/bin/systemctl:system/etc/vps-setup/rootdir/usr/bin/systemctl \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/local/bin/journalctl:system/etc/vps-setup/rootdir/usr/local/bin/journalctl \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/environment:system/etc/vps-setup/rootdir/etc/environment \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/default/locale:system/etc/vps-setup/rootdir/etc/default/locale \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf:system/etc/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd:system/etc/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd \
+    device/xiaomi/santoni/vps-setup/rootdir/root/.bashrc:system/etc/vps-setup/rootdir/root/.bashrc \
+    device/xiaomi/santoni/vps-setup/rootdir/root/.profile:system/etc/vps-setup/rootdir/root/.profile \
+    device/xiaomi/santoni/vps-setup/rootdir/root/boot-services.sh:system/etc/vps-setup/rootdir/root/boot-services.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/root/suid-mount.sh:system/etc/vps-setup/rootdir/root/suid-mount.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.bashrc:system/etc/vps-setup/rootdir/home/ubuntu/.bashrc \
+    device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile

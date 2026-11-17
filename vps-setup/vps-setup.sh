@@ -352,6 +352,26 @@ if [ -n "$root_pass" ]; then
     fi
 fi
 
+# ------------------------------------------------- 6b. chroot overlay (rootdir)
+# apply.sh memasang user ubuntu, sudo lewat suid bind mount, systemctl
+# replacement, policy-rc.d, runlevel shim, journalctl wrapper, dan hook boot.
+# Overlay dipasang ke /system/etc/vps-setup lewat PRODUCT_COPY_FILES.
+OVERLAY_SRC=/system/etc/vps-setup
+if [ -d "$OVERLAY_SRC" ]; then
+    echo "[6b/7] Applying the chroot overlay"
+    rm -rf "$UBUNTU_ROOT/tmp/vps-setup"
+    mkdir -p "$UBUNTU_ROOT/tmp/vps-setup"
+    cp -a "$OVERLAY_SRC/." "$UBUNTU_ROOT/tmp/vps-setup/"
+    if chroot "$UBUNTU_ROOT" /bin/bash -c \
+            "$CHROOT_ENV; /bin/bash /tmp/vps-setup/apply.sh /tmp/vps-setup/rootdir"; then
+        echo "      overlay applied"
+    else
+        echo "      overlay FAILED, run apply.sh by hand"
+    fi
+else
+    echo "[6b/7] no $OVERLAY_SRC, skipping the overlay"
+fi
+
 # apt does not start sshd in a chroot, and the user should not have to reboot
 # to reach the box. Start it the way init.ubuntu.sh does on boot.
 sshd_up=0

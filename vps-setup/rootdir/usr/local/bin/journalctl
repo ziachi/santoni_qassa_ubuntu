@@ -1,0 +1,27 @@
+#!/bin/sh
+# journalctl minimal: docker-systemctl-replacement menulis
+# /var/log/journal/<unit>.service.log
+unit=""; follow=0
+for a in "$@"; do
+  case "$a" in
+    -f|--follow) follow=1 ;;
+    -*) ;;
+    *) unit="$a" ;;
+  esac
+done
+unit="${unit%.service}"
+if [ -n "$unit" ]; then
+  for f in "/var/log/journal/$unit.service.log" "/var/log/journal/$unit.log"; do
+    [ -f "$f" ] || continue
+    if [ "$follow" = 1 ]; then exec tail -f -n 200 "$f"; fi
+    exec tail -n 200 "$f"
+  done
+  echo "journalctl: tidak ada log untuk $unit" >&2
+  exit 1
+fi
+if [ -d /var/log/journal ]; then
+  if [ "$follow" = 1 ]; then exec tail -f -n 200 /var/log/journal/*.log; fi
+  exec tail -n 200 /var/log/journal/*.log
+fi
+echo "journalctl: belum ada log" >&2
+exit 1

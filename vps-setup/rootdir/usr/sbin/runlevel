@@ -1,0 +1,5 @@
+#!/bin/sh
+# systemd ships runlevel as a symlink to systemctl, and the replacement answers
+# with a unit table instead of a runlevel. invoke-rc.d parses that output and
+# then fails its `test x${RL} = x0` checks, so answer the way sysvinit does.
+echo "N 5"
