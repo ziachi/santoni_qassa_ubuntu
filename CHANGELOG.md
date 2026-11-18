@@ -84,6 +84,7 @@
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
 | 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
 | 80 | - | 589b939 | vps-setup: start cron at boot so crontab jobs actually run |
+| 81 | - | - | vps-setup: give cron.service a PIDFile so is-active reports it |
 
 ## Releases
 
@@ -1905,6 +1906,34 @@ the job and the file were removed afterwards. `systemctl is-active ssh` still
 returns `active` and `ping` still reports 0% packet loss for `root` and
 `ubuntu`, so the new step did not disturb the existing boot path.
 
+### #81 — Give `cron.service` a PIDFile so `is-active` reports it
+
+**Problem**
+After #80 the daemon was running — `ps aux` showed `/usr/sbin/cron -f -P` and
+`systemctl is-enabled cron` said `enabled` — but `systemctl is-active cron`
+still returned `inactive` with exit 3. `cron.service` has no `Type=` line, so it
+defaults to `Type=simple`, and the shim's `get_active_service_from()` has no
+PIDFile to read for that type: it falls back to `/run/cron.service.status`,
+which was left 0 bytes, and then to a `MainPID` that was never written. The
+daemon was healthy; only the status lookup was blind.
+
+**Fix**
+- `vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf`: new
+  drop-in with `PIDFile=/run/crond.pid`, the file cron writes itself. This is
+  the same shape as the existing `ssh.service.d/pidfile.conf`, and it makes the
+  shim's first branch — a live PIDFile outranks the status file — answer for
+  cron.
+
+**Files**
+- `vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf`
+- `CHANGELOG.md`
+- `README.md`
+
+**Impact**
+Verified on the device. `systemctl is-active cron` returns `active` with exit 0
+and `systemctl status cron` shows `Active: active (running)` with the drop-in
+listed. The check survives a reboot, because the drop-in lives in `/etc` on
+`/data` and cron rewrites `/run/crond.pid` on every start.
 
 ## Key Changes by Version
 
