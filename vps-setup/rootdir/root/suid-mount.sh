@@ -18,8 +18,13 @@ done
 # Geyser's NetherNet listener hits exactly that, so its Bedrock port never
 # opens. Binding / onto itself adds the entry without changing what the path
 # resolves to. Idempotent: skipped when / is already a mount point.
+#
+# It has to be --rbind, not --bind. A plain bind hides the submounts, so /proc,
+# /sys and /dev disappear: /dev falls back to the bare directory on the rootfs,
+# /dev/null stops being writable, and sshd dies with "cannot open /dev/null:
+# Permission denied". --rbind carries the submounts across.
 if ! grep -qE "^[^ ]+ / " /proc/mounts; then
-    mount --bind / / 2>/dev/null
+    mount --rbind / / 2>/dev/null
 fi
 
 # /dev/shm is a tmpfs on a normal Linux box. The Android /dev rbind does not
