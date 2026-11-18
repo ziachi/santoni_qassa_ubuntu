@@ -83,7 +83,7 @@
 | 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
 | 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
-| 80 | - | - | vps-setup: start cron at boot so crontab jobs actually run |
+| 80 | - | 589b939 | vps-setup: start cron at boot so crontab jobs actually run |
 
 ## Releases
 
