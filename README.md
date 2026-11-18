@@ -944,7 +944,7 @@ git config --global commit.gpgsign true
 Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
 Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-Current head: `86e92b5` — the reboot fix on top of `v1.1.1` (`0a809b0`, v33).
+Current head: `9c3e48e` — the English-only vps-setup messages on top of the reboot fix (`86e92b5`) and `v1.1.1` (`0a809b0`, v33).
 
 ---
 

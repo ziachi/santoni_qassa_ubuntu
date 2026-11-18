@@ -81,6 +81,7 @@
 | 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
 | 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
+| 78 | - | 9c3e48e | vps-setup: make every message and comment English |
 
 ## Releases
 
@@ -1800,6 +1801,34 @@ restarted at 0. `reboot` without sudo now prints
 reports `active` for `ubuntu`, `systemctl status ssh` shows `active (running)`
 with a PID that matches `/run/sshd.pid`, and `systemctl list-units` prints 204
 units with no `WARNING` lines.
+
+### #78 — Make every vps-setup message and comment English
+
+**Problem**
+`apply.sh` mixed languages inside itself: sections 1, 2 and 5 were English while
+3, 4, 6, 7 and 8 were Indonesian, and its detail lines (`systemctl.orig dibuat`,
+`belum terpasang`, `apply.sh: selesai`) were Indonesian too. `boot-services.sh`
+carried Indonesian comments, and `vps-setup.sh` had one Indonesian comment. A
+single `vps-setup` run therefore printed English and Indonesian in the same
+terminal, which reads as unfinished.
+
+**Fix**
+- `vps-setup/apply.sh`: translate the five Indonesian section headers and the
+  seven Indonesian detail lines, and align the eight section rules to one column
+  (they ranged from 76 to 80 characters).
+- `vps-setup/rootdir/root/boot-services.sh`: translate the header, the
+  `/run/systemd/system` note, the `PIDFile` note and the governor note.
+- `vps-setup/vps-setup.sh`: translate the `6b` overlay comment.
+
+**Files**
+- `vps-setup/apply.sh`
+- `vps-setup/rootdir/root/boot-services.sh`
+- `vps-setup/vps-setup.sh`
+
+**Impact**
+Output text and comments only. No logic, no file mode and no overlay payload
+changed; `bash -n` passes on all three scripts. The image must be rebuilt for the
+new strings to reach the device.
 
 ## Key Changes by Version
 
