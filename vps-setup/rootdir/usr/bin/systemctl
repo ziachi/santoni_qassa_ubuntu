@@ -183,7 +183,7 @@ _proc_sys_uptime = "/proc/uptime"
 _proc_sys_stat = "/proc/stat"
 
 # default values
-SystemCompatibilityVersion: int = 219
+SystemCompatibilityVersion: int = 249
 SysInitTarget: str = "sysinit.target"
 SysInitWait: int = 5 # max for target
 MinimumYield: float = 0.5
@@ -3336,6 +3336,22 @@ class Systemctl:
             logg.log(DEBUG_BOOTTIME, "  file time: %s (%s)", datetime.datetime.fromtimestamp(filetime), o22(filename))
             logg.log(DEBUG_BOOTTIME, "  boot time: %s (%s)", datetime.datetime.fromtimestamp(boottime), "status modified later")
             return False # OK
+        # A pid file whose PID is still alive is not stale, whatever its mtime
+        # says. This device boots with the clock at 1970 and NTP corrects it a
+        # few seconds later, so a pid file written by sshd before the correction
+        # looks older than the computed boot time. Truncating it made
+        # `systemctl status ssh` report inactive for a daemon that was running.
+        try:
+            with open(filename) as f:
+                for line in f:
+                    if line.strip():
+                        if pid_exists(to_intN(line.strip())):
+                            logg.log(DEBUG_BOOTTIME, "  file time: %s (%s)", datetime.datetime.fromtimestamp(filetime), o22(filename))
+                            logg.log(DEBUG_BOOTTIME, "  boot time: %s (%s)", datetime.datetime.fromtimestamp(boottime), "pid still alive, kept")
+                            return False # OK
+                        break
+        except (OSError, ValueError):
+            pass
         try:
             logg.log(DEBUG_BOOTTIME, "  file time: %s (%s)", datetime.datetime.fromtimestamp(filetime), o22(filename))
             logg.log(DEBUG_BOOTTIME, "  boot time: %s (%s)", datetime.datetime.fromtimestamp(boottime), "status TRUNCATED NOW")
@@ -4095,8 +4111,11 @@ class Systemctl:
             pid_file = self.pid_file_from(conf)
             pid = self.read_mainpid_from(conf)
             if self.is_active_pid(pid):
-                logg.error("the service is already running on PID %s", pid)
-                return False
+                # Real systemd treats `start` on an already-active unit as a
+                # no-op that succeeds. Returning failure here makes installers
+                # abort with "Job for X failed" even though the service is up.
+                logg.warning("the service is already running on PID %s", pid)
+                return True
             notify = self.notify_socket_from(conf)
             if notify:
                 env["NOTIFY_SOCKET"] = notify.socketfile
@@ -6843,6 +6862,12 @@ class Systemctl:
         return self._sysinit_target
     def is_system_running(self) -> str:
         """ is-system-running -- show sysinit status (substate) """
+        # There is no real systemd in the chroot, so sysinit.target never
+        # becomes active and this reported "starting" forever. Installers use
+        # the exit code to decide the host is ready, so report "running" once
+        # the boot hook has created /run/systemd/system.
+        if os.path.isdir("/run/systemd/system"):
+            return "running"
         conf = self.sysinit_target()
         if not self.is_running_unit_from(conf):
             time.sleep(MinimumYield)
@@ -7043,7 +7068,12 @@ class Systemctl:
         return lines
     def systemd_version(self) -> str:
         """ the version line for systemd compatibility """
-        return "systemd %s\n  - via systemctl.py %s" % (self._systemd_version, __version__)
+        # Installers parse this line to decide which systemd features they may
+        # use (--now, --no-block, is-system-running, ...). Report the Ubuntu
+        # 22.04 systemd version so a modern installer takes the systemd path
+        # instead of falling back to sysvinit or openrc.
+        return "systemd %s (249.11-0ubuntu3.23)\n  - via systemctl.py %s" % (
+            self._systemd_version, __version__)
     def systemd_features(self) -> str:
         """ the info line for systemd features """
         features1 = "-PAM -AUDIT -SELINUX -IMA -APPARMOR -SMACK"
