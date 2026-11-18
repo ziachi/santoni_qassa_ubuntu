@@ -80,7 +80,7 @@
 | 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
 | 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
-| 77 | - | a3b6e2c | vps-setup: make reboot actually reboot the device |
+| 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
 
 ## Releases
 
