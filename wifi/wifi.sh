@@ -145,39 +145,43 @@ set_clock() {
     # netd only learns resolvers from the framework, so bionic cannot resolve
     # and curl dies before it sends a request. busybox nslookup speaks DNS
     # itself, so resolve the host here and hand curl the address.
-    hdr=
-    i=0
-    while [ -z "$hdr" ] && [ "$i" -lt 3 ]; do
-        for host in connectivitycheck.gstatic.com www.google.com cdimage.ubuntu.com; do
-            addr=
-            for ns in $(cat /data/vps_dns 2>/dev/null) 8.8.8.8 223.5.5.5; do
-                addr=$("$BB" nslookup "$host" "$ns" 2>/dev/null \
+    # Every variable here is sc_-prefixed. `connect` calls this right after
+    # `addr=$(wait_ip)`, and a plain `addr` in this function overwrote the
+    # address it had just leased with the resolved address of the time host, so
+    # `wifi connect` printed "ip 142.251.150.120" instead of the LAN IP.
+    sc_hdr=
+    sc_i=0
+    while [ -z "$sc_hdr" ] && [ "$sc_i" -lt 3 ]; do
+        for sc_host in connectivitycheck.gstatic.com www.google.com cdimage.ubuntu.com; do
+            sc_addr=
+            for sc_ns in $(cat /data/vps_dns 2>/dev/null) 8.8.8.8 223.5.5.5; do
+                sc_addr=$("$BB" nslookup "$sc_host" "$sc_ns" 2>/dev/null \
                     | sed -n 's/^Address[ 0-9]*: *//p' | grep -v ':' | head -1)
-                [ -n "$addr" ] && break
+                [ -n "$sc_addr" ] && break
             done
-            [ -n "$addr" ] || continue
-            hdr=$(curl -sI --max-time 10 --resolve "$host:80:$addr" \
-                  "http://$host/" 2>/dev/null \
+            [ -n "$sc_addr" ] || continue
+            sc_hdr=$(curl -sI --max-time 10 --resolve "$sc_host:80:$sc_addr" \
+                  "http://$sc_host/" 2>/dev/null \
                   | tr -d '\r' | sed -n 's/^[Dd]ate: *//p' | head -1)
-            [ -n "$hdr" ] && break
+            [ -n "$sc_hdr" ] && break
         done
-        [ -n "$hdr" ] && break
+        [ -n "$sc_hdr" ] && break
         sleep 2
-        i=$((i + 1))
+        sc_i=$((sc_i + 1))
     done
-    [ -n "$hdr" ] || { echo "wifi: could not read the time" >&2; return 1; }
-    set -- $hdr
+    [ -n "$sc_hdr" ] || { echo "wifi: could not read the time" >&2; return 1; }
+    set -- $sc_hdr
     case "$3" in
-        Jan) m=01 ;; Feb) m=02 ;; Mar) m=03 ;; Apr) m=04 ;;
-        May) m=05 ;; Jun) m=06 ;; Jul) m=07 ;; Aug) m=08 ;;
-        Sep) m=09 ;; Oct) m=10 ;; Nov) m=11 ;; Dec) m=12 ;;
-        *) echo "wifi: unparsable date '$hdr'" >&2; return 1 ;;
+        Jan) sc_m=01 ;; Feb) sc_m=02 ;; Mar) sc_m=03 ;; Apr) sc_m=04 ;;
+        May) sc_m=05 ;; Jun) sc_m=06 ;; Jul) sc_m=07 ;; Aug) sc_m=08 ;;
+        Sep) sc_m=09 ;; Oct) sc_m=10 ;; Nov) sc_m=11 ;; Dec) sc_m=12 ;;
+        *) echo "wifi: unparsable date '$sc_hdr'" >&2; return 1 ;;
     esac
     # toybox date's default SET format is MMDDhhmmCCYY.ss, which needs no
     # strptime support. -D is the fallback for builds that parse it.
-    hm=${5%:*}
-    date -u "$m$2${hm%:*}${hm#*:}$4.00" 2>/dev/null \
-        || date -u -D '%Y-%m-%d %H:%M:%S' "$4-$m-$2 $5" 2>/dev/null
+    sc_hm=${5%:*}
+    date -u "$sc_m$2${sc_hm%:*}${sc_hm#*:}$4.00" 2>/dev/null \
+        || date -u -D '%Y-%m-%d %H:%M:%S' "$4-$sc_m-$2 $5" 2>/dev/null
     [ "$(date +%Y)" -ge 2020 ] || echo "wifi: could not set the clock" >&2
 }
 

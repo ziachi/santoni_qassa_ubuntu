@@ -70,8 +70,22 @@ id ubuntu >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash -U ubuntu
 usermod -aG sudo,aid_inet,aid_net_raw,aid_sdcard_rw ubuntu
 id ubuntu
 
+# `passwd -S` field 2 is the state flag, not the password: P=set, L=locked,
+# NP=none. Printing it raw reads like the password is literally "P".
+passwd_state() {
+    case "$(passwd -S "$1" 2>/dev/null | awk '{print $2}')" in
+        P)  echo "set" ;;
+        L)  echo "locked" ;;
+        NP) echo "none" ;;
+        *)  echo "unknown" ;;
+    esac
+}
+
 # Default password. chpasswd in this chroot can exit 0 without writing
 # /etc/shadow, so the field is checked and openssl is the fallback.
+# vps-setup passes UBUNTU_USER_PASS so the value it prints in its summary is
+# the one that was actually set here.
+UBUNTU_USER_PASS=${UBUNTU_USER_PASS:-ubuntu}
 set_ubuntu_password() {
     printf 'ubuntu:%s\n' "$1" | chpasswd 2>/dev/null || true
     if grep -q '^ubuntu:[!*]' /etc/shadow 2>/dev/null && [ -x /usr/bin/openssl ]; then
@@ -79,8 +93,9 @@ set_ubuntu_password() {
         [ -n "$hash" ] && usermod -p "$hash" ubuntu 2>/dev/null || true
     fi
 }
-set_ubuntu_password ubuntu
-printf '  password -> %s\n' "$(passwd -S ubuntu 2>/dev/null | awk '{print $2}' || true)"
+set_ubuntu_password "$UBUNTU_USER_PASS"
+printf '  password -> %s\n' "$UBUNTU_USER_PASS"
+printf '  passwd   -> %s\n' "$(passwd_state ubuntu)"
 
 # --------------------------------------------------------------- 3. backups
 say "3. backup binary asli sebelum ditimpa wrapper"
@@ -153,7 +168,12 @@ done
 # --------------------------------------------------------------- 7. suid mount
 say "7. pasang suid bind mount"
 [ -x /root/suid-mount.sh ] && /root/suid-mount.sh
-grep -E ' /usr/bin | /usr/sbin ' /proc/mounts | sed 's/ .*ext4/ ext4/' || echo "  (belum terpasang)"
+# Print the mount point, its source and its options. The old
+# `sed 's/ .*ext4/ ext4/'` was greedy: it ate the mount point and every option,
+# so the check printed the userdata line four times and never showed whether
+# the suid bind mounts were actually in place.
+awk '$2 == "/usr/bin" || $2 == "/usr/sbin" { printf "  %-10s %s  %s\n", $2, $1, $4 }' /proc/mounts
+grep -qE ' /usr/(bin|sbin) ' /proc/mounts || echo "  (belum terpasang)"
 
 # systemctl3.py reads PIDFile for status; a stale or empty file reports the
 # running sshd as inactive and makes `systemctl default` try a second one.
@@ -162,17 +182,22 @@ pid=$(pgrep -f 'sshd.*\[listener\]' | head -1 || true)
 
 # ---------------------------------------------------------------- 8. verifikasi
 say "8. verifikasi"
-# sshd is started by init.ubuntu.sh, not by systemctl, so the unit is only
-# registered here. Starting it makes `systemctl status ssh` report the daemon
-# instead of "inactive (dead)" on a fresh install.
+# sshd is started by init.ubuntu.sh on boot and by vps-setup right after this
+# script on a fresh install, so the unit can legitimately still be inactive
+# here. Report the daemon itself: `systemctl status ssh` printed
+# "Active: inactive (dead)" on a first-time setup and read like a failure.
 systemctl start ssh >/dev/null 2>&1 || true
 # Every check below is informational. A missing tool must not abort the script:
 # `set -e` plus `pipefail` used to turn a failed `systemctl status` into
 # "overlay FAILED" even though the overlay itself had applied cleanly.
 printf '  sudo   -> %s\n' "$(su - ubuntu -c 'sudo -n whoami' 2>&1 | head -1 || true)"
 printf '  editor -> %s\n' "$(su - ubuntu -c 'editor --version 2>/dev/null | head -1' 2>&1 || true)"
-printf '  passwd -> %s\n' "$(passwd -S ubuntu 2>/dev/null | awk '{print $2}' || true)"
-systemctl status ssh 2>&1 | head -4 || true
+printf '  passwd -> %s\n' "$(passwd_state ubuntu)"
+if pgrep -f 'sshd.*\[listener\]' >/dev/null 2>&1; then
+    printf '  sshd   -> running (pid %s)\n' "$(pgrep -f 'sshd.*\[listener\]' | head -1)"
+else
+    printf '  sshd   -> not started yet (vps-setup starts it after this script)\n'
+fi
 
 echo
 echo "apply.sh: selesai"

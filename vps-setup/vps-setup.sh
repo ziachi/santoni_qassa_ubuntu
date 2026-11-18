@@ -366,6 +366,15 @@ if [ -n "$root_pass" ]; then
     fi
 fi
 
+# The overlay creates the `ubuntu` user (uid 1000, in sudo with NOPASSWD) and
+# sets its password. Keep the value here so the summary can print it and the
+# device keeps a copy next to the root one.
+UBUNTU_USER_PASS_FILE=/data/ubuntu_user_pass
+ubuntu_pass=${UBUNTU_USER_PASS:-ubuntu}
+echo "$ubuntu_pass" > "$UBUNTU_USER_PASS_FILE" || die "cannot write $UBUNTU_USER_PASS_FILE"
+chmod 600 "$UBUNTU_USER_PASS_FILE" 2>/dev/null
+chown 0:0 "$UBUNTU_USER_PASS_FILE" 2>/dev/null
+
 # ------------------------------------------------- 6b. chroot overlay (rootdir)
 # apply.sh memasang user ubuntu, sudo lewat suid bind mount, systemctl
 # replacement, policy-rc.d, runlevel shim, journalctl wrapper, dan hook boot.
@@ -376,7 +385,8 @@ if [ -d "$OVERLAY_SRC" ]; then
     rm -rf "$UBUNTU_ROOT/tmp/vps-setup"
     mkdir -p "$UBUNTU_ROOT/tmp/vps-setup"
     cp -a "$OVERLAY_SRC/." "$UBUNTU_ROOT/tmp/vps-setup/"
-    if chroot "$UBUNTU_ROOT" /bin/bash -c \
+    if chroot "$UBUNTU_ROOT" /usr/bin/env UBUNTU_USER_PASS="$ubuntu_pass" \
+            /bin/bash -c \
             "$CHROOT_ENV; /bin/bash /tmp/vps-setup/apply.sh /tmp/vps-setup/rootdir"; then
         echo "      overlay applied"
     else
@@ -433,12 +443,16 @@ if [ "$sshd_up" = 1 ]; then
 else
     echo "SSH: not running yet - reboot, then ssh root@$ip_addr   password: $root_pass"
 fi
+echo "     ssh ubuntu@$ip_addr   password: $ubuntu_pass"
 echo "  Wi-Fi IP : $ip_addr"
 echo "  Enter    : adb shell"
-echo "  SSH      : ssh root@$ip_addr"
+echo "  SSH root : ssh root@$ip_addr"
+echo "  SSH user : ssh ubuntu@$ip_addr   (uid 1000, sudo without a password)"
 echo
 echo "  Passwords, also stored on the device (mode 600 root:root):"
 echo "    adb over Wi-Fi : ${adb_pass:-santoniadmin}"
 echo "                     /data/adb_wifi_pass"
 echo "    ssh root       : ${root_pass:-not set}"
 echo "                     /data/ubuntu_root_pass"
+echo "    ssh ubuntu     : $ubuntu_pass"
+echo "                     /data/ubuntu_user_pass"
