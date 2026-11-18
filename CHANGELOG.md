@@ -86,6 +86,7 @@
 | 80 | - | 589b939 | vps-setup: start cron at boot so crontab jobs actually run |
 | 81 | - | 28c0686 | vps-setup: give cron.service a PIDFile so is-active reports it |
 | 82 | - | - | vps-setup: move the boot scripts out of /root |
+| 83 | - | - | vps-setup: ship cron.service.d/pidfile.conf in the image |
 
 ## Releases
 

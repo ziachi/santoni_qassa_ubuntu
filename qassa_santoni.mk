@@ -152,6 +152,7 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/etc/environment:system/etc/vps-setup/rootdir/etc/environment \
     device/xiaomi/santoni/vps-setup/rootdir/etc/default/locale:system/etc/vps-setup/rootdir/etc/default/locale \
     device/xiaomi/santoni/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf:system/etc/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf:system/etc/vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf \
     device/xiaomi/santoni/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd:system/etc/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd \
     device/xiaomi/santoni/vps-setup/rootdir/root/.bashrc:system/etc/vps-setup/rootdir/root/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/root/.profile:system/etc/vps-setup/rootdir/root/.profile \

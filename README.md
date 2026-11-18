@@ -733,6 +733,9 @@ a slow or failing cron cannot delay the login path.
 was running. The drop-in gives it the pidfile cron writes itself, which is the
 same trick `ssh.service.d/pidfile.conf` uses for sshd.
 
+Both drop-ins are shipped in the image by `PRODUCT_COPY_FILES` in
+`qassa_santoni.mk`, alongside the rest of `vps-setup/rootdir`.
+
 ### Wi-Fi helper: `wifi`
 
 `cmd wifi` and `svc wifi` are shell front-ends for `system_server`, and
