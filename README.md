@@ -701,6 +701,8 @@ adb shell cat /data/ubuntu-boot.log
 
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
+`vps-setup` stops at `sshd started` on the console; the listening check is
+written to this boot log, not to the installer output.
 
 ### Chroot boot services: `boot-services.sh`
 
@@ -724,9 +726,9 @@ re-bind does not touch it.
 | cron | `systemctl enable cron` + `systemctl start cron` when the unit or the init script exists, so `crontab` jobs actually run; `cron.service.d/pidfile.conf` points the shim at `/run/crond.pid` so `is-active` sees it |
 | CPU governor | picks `schedutil` (or `interactive`/`ondemand`) instead of pinning `performance` on a device with no heatsink |
 
-`cron` is installed from `packages.list` but nothing else enables it, so the
-cron step is what makes `crontab -e` useful. It runs after sshd is settled, so
-a slow or failing cron cannot delay the login path.
+`cron` is installed from `VPS_PACKAGES` in `vps-setup.sh` but nothing else
+enables it, so the cron step is what makes `crontab -e` useful. It runs after
+sshd is settled, so a slow or failing cron cannot delay the login path.
 
 `cron.service` has no `Type=` line, so the shim cannot derive its state from a
 `MainPID` it never wrote, and `is-active` reported `inactive` for a daemon that

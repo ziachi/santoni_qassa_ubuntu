@@ -304,7 +304,8 @@ fi
 # without sudo, an editor, curl or even ps, and apply.sh then fails its own
 # verification with "sudo: command not found". Install the standard server set
 # in the same pass so the overlay has something to work with.
-VPS_PACKAGES="openssh-server sudo nano vim-tiny curl wget iputils-ping dnsutils net-tools procps htop git ca-certificates unzip less"
+# cron is here because boot-services.sh enables it on every boot.
+VPS_PACKAGES="openssh-server sudo nano vim-tiny curl wget iputils-ping dnsutils net-tools procps htop git ca-certificates unzip less cron"
 if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y $VPS_PACKAGES"; then
     echo "      apt finished"
 else

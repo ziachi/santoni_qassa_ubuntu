@@ -87,6 +87,7 @@
 | 81 | - | 28c0686 | vps-setup: give cron.service a PIDFile so is-active reports it |
 | 82 | - | - | vps-setup: move the boot scripts out of /root |
 | 83 | - | - | vps-setup: ship cron.service.d/pidfile.conf in the image |
+| 84 | - | - | vps-setup: install cron, it was never in VPS_PACKAGES |
 
 ## Releases
 
@@ -2042,3 +2043,26 @@ governor all still come up from the new path.
 ### v15
 - SEPolicy cleanup, Dolby initial removal, build deps fix
 - 6 bug fixes from V14 logcat analysis
+
+## Detail
+
+### #84 — `cron` was never installed
+
+**Problem.** `boot-services.sh` enables `cron` on every boot and
+`cron.service.d/pidfile.conf` points the shim at `/run/crond.pid`, but the
+package itself was never installed. `VPS_PACKAGES` in `vps-setup.sh` is a
+hardcoded list that did not include `cron`, and `packages.list` — which does
+list it — is only copied into the image and never read by any script. The
+`start_cron` guard therefore found neither `/lib/systemd/system/cron.service`
+nor `/etc/init.d/cron` and skipped silently, so the drop-in was orphaned and
+`crontab` was missing entirely.
+
+**Fix.** Add `cron` to `VPS_PACKAGES`, and point the comments and README at
+`VPS_PACKAGES` instead of the unused `packages.list`.
+
+**Files.** `vps-setup/vps-setup.sh`,
+`vps-setup/rootdir/usr/local/sbin/boot-services.sh`, `README.md`,
+`CHANGELOG.md`.
+
+**Impact.** `crontab` and `cron.service` now exist, so the boot step can
+enable and start the daemon and the pidfile drop-in has a unit to attach to.

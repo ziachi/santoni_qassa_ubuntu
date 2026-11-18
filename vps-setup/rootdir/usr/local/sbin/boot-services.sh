@@ -38,11 +38,11 @@ assert_sshd_pid
 /usr/bin/systemctl default
 assert_sshd_pid
 
-# cron is in packages.list, so `crontab` and /etc/init.d/cron are both present,
-# but nothing ever enabled the daemon: the unit sat at inactive (dead) and
-# disabled, and a job written with `crontab -e` was accepted and never ran.
-# Enable and start it here, after sshd is settled, so a slow or failing cron
-# cannot delay the login path. Both calls are idempotent.
+# cron is in VPS_PACKAGES in vps-setup.sh, so `crontab` and /etc/init.d/cron
+# are both present, but nothing ever enabled the daemon: the unit sat at
+# inactive (dead) and disabled, and a job written with `crontab -e` was
+# accepted and never ran. Enable and start it here, after sshd is settled, so a
+# slow or failing cron cannot delay the login path. Both calls are idempotent.
 start_cron() {
     if [ -f /lib/systemd/system/cron.service ] || [ -f /etc/init.d/cron ]; then
         /usr/bin/systemctl enable cron >/dev/null 2>&1
