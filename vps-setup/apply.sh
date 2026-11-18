@@ -64,6 +64,13 @@ add_group aid_net_raw 3004
 add_group aid_sdcard_rw 1015
 getent group aid_inet aid_net_raw aid_sdcard_rw
 
+# Android's paranoid network check gates socket() on the caller's GID, not on
+# capabilities, so root needs the same groups as ubuntu: without aid_inet even
+# getaddrinfo fails, and without aid_net_raw ping dies with "socket: Permission
+# denied" even though /bin/ping carries cap_net_raw.
+usermod -aG aid_inet,aid_net_raw root
+id root
+
 # ---------------------------------------------------------------------- 2. user
 say "2. user ubuntu"
 id ubuntu >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash -U ubuntu

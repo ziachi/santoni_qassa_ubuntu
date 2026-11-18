@@ -82,6 +82,7 @@
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
 | 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
+| 79 | - | - | vps-setup: give root the Android network groups and quiet the ssh condition |
 
 ## Releases
 
@@ -1829,6 +1830,49 @@ terminal, which reads as unfinished.
 Output text and comments only. No logic, no file mode and no overlay payload
 changed; `bash -n` passes on all three scripts. The image must be rebuilt for the
 new strings to reach the device.
+
+### #79 — Give root the Android network groups and quiet the ssh condition
+
+**Problem**
+Inside the chroot, `root` had no network at all. `ping 8.8.8.8` failed with
+`ping: socket: Permission denied` and `ping google.com` failed with
+`Temporary failure in name resolution`, while the same two commands worked for
+`ubuntu`. The kernel is built with `CONFIG_ANDROID_PARANOID_NETWORK`, which
+gates `socket()` on the caller's GID — `aid_inet` (3003) for ordinary sockets
+and `aid_net_raw` (3004) for raw ones — and ignores `cap_net_raw`, which
+`/bin/ping` already carries. `apply.sh` created both groups but added only
+`ubuntu` to them, so the account the chroot is normally used from was the one
+account without a network stack. DNS failed for the same reason: `getaddrinfo`
+needs a UDP socket before it can read `/etc/resolv.conf`.
+
+Separately, every `systemctl start ssh`, `reload ssh` and `restart ssh` printed
+`ERROR:systemctl:not found /etc/ssh/sshd_not_to_be_run`. `ssh.service` carries
+`ConditionPathExists=!/etc/ssh/sshd_not_to_be_run`, and the shim logged the
+missing file as an error before it looked at the `!` prefix, so the success case
+of a negated condition was reported as a failure.
+
+**Fix**
+- `vps-setup/apply.sh`: `usermod -aG aid_inet,aid_net_raw root` right after the
+  three Android groups are created, with a comment recording why capabilities
+  are not enough.
+- `vps-setup/rootdir/usr/bin/systemctl`: move the `not found` log inside the
+  `"!" not in mode` branch and log the negated case at debug level, the way the
+  `ConditionPathExistsGlob` branch above it already does.
+
+**Files**
+- `vps-setup/apply.sh`
+- `vps-setup/rootdir/usr/bin/systemctl`
+
+**Impact**
+Verified on the device, not simulated. `ping -c 3 8.8.8.8` and
+`ping -c 3 google.com` report 0% packet loss as `root` and as `ubuntu`, and
+`dig +short ubuntu.com` resolves for both. `systemctl start ssh` now prints only
+the legitimate `the service is already running on PID ...` warning, and
+`reload`/`restart` are silent. `systemctl is-active ssh` still returns `active`
+with exit 0 for both users, including with a poisoned
+`/run/ssh.service.status`. The image must be rebuilt for the group change to
+reach a fresh install; on a running device `usermod -aG aid_inet,aid_net_raw
+root` applies it immediately.
 
 ## Key Changes by Version
 
