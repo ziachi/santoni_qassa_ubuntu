@@ -117,6 +117,16 @@ while IFS= read -r rel; do
     printf '  %-52s %s %s\n' "/$rel" "$mode" "$owner"
 done < <(cd "$OVERLAY" && find . -type f | sed 's|^\./||' | sort)
 
+# sudo refuses to run at all when /etc/sudoers.d is group- or world-writable,
+# and `mkdir -p` creates a missing directory with the ambient umask. Pin the
+# directories the overlay writes into so a fresh chroot cannot end up with
+# "sudo: /etc/sudoers.d is world writable".
+for d in /etc/sudoers.d /etc/systemd/system/ssh.service.d; do
+    [ -d "$d" ] || continue
+    chmod 755 "$d"
+    chown root:root "$d"
+done
+
 # ------------------------------------------------------- 5. editor + locale
 say "5. editor default + locale"
 if [ -x /usr/bin/nano ]; then
