@@ -70,6 +70,18 @@ id ubuntu >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash -U ubuntu
 usermod -aG sudo,aid_inet,aid_net_raw,aid_sdcard_rw ubuntu
 id ubuntu
 
+# Default password. chpasswd in this chroot can exit 0 without writing
+# /etc/shadow, so the field is checked and openssl is the fallback.
+set_ubuntu_password() {
+    printf 'ubuntu:%s\n' "$1" | chpasswd 2>/dev/null || true
+    if grep -q '^ubuntu:[!*]' /etc/shadow 2>/dev/null && [ -x /usr/bin/openssl ]; then
+        hash=$(printf '%s\n' "$1" | /usr/bin/openssl passwd -6 -stdin 2>/dev/null)
+        [ -n "$hash" ] && usermod -p "$hash" ubuntu 2>/dev/null || true
+    fi
+}
+set_ubuntu_password ubuntu
+printf '  password -> %s\n' "$(passwd -S ubuntu 2>/dev/null | awk '{print $2}' || true)"
+
 # --------------------------------------------------------------- 3. backups
 say "3. backup binary asli sebelum ditimpa wrapper"
 # systemctl.orig and sshd.real are package binaries, so they are not committed.
@@ -140,9 +152,17 @@ pid=$(pgrep -f 'sshd.*\[listener\]' | head -1 || true)
 
 # ---------------------------------------------------------------- 8. verifikasi
 say "8. verifikasi"
-printf '  sudo   -> %s\n' "$(su - ubuntu -c 'sudo -n whoami' 2>&1 | head -1)"
-printf '  editor -> %s\n' "$(su - ubuntu -c 'editor --version 2>/dev/null | head -1' 2>&1)"
-systemctl status ssh 2>&1 | head -4
+# sshd is started by init.ubuntu.sh, not by systemctl, so the unit is only
+# registered here. Starting it makes `systemctl status ssh` report the daemon
+# instead of "inactive (dead)" on a fresh install.
+systemctl start ssh >/dev/null 2>&1 || true
+# Every check below is informational. A missing tool must not abort the script:
+# `set -e` plus `pipefail` used to turn a failed `systemctl status` into
+# "overlay FAILED" even though the overlay itself had applied cleanly.
+printf '  sudo   -> %s\n' "$(su - ubuntu -c 'sudo -n whoami' 2>&1 | head -1 || true)"
+printf '  editor -> %s\n' "$(su - ubuntu -c 'editor --version 2>/dev/null | head -1' 2>&1 || true)"
+printf '  passwd -> %s\n' "$(passwd -S ubuntu 2>/dev/null | awk '{print $2}' || true)"
+systemctl status ssh 2>&1 | head -4 || true
 
 echo
 echo "apply.sh: selesai"

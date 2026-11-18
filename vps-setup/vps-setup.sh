@@ -292,7 +292,12 @@ if [ -x "$UBUNTU_ROOT/usr/bin/getent" ]; then
     done
 fi
 
-if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y openssh-server"; then
+# ubuntu-base ships almost nothing. openssh-server alone leaves the chroot
+# without sudo, an editor, curl or even ps, and apply.sh then fails its own
+# verification with "sudo: command not found". Install the standard server set
+# in the same pass so the overlay has something to work with.
+VPS_PACKAGES="openssh-server sudo nano vim-tiny curl wget iputils-ping dnsutils net-tools procps htop git ca-certificates unzip less"
+if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y $VPS_PACKAGES"; then
     echo "      apt finished"
 else
     echo "      apt failed, run it by hand later"
