@@ -878,6 +878,17 @@ about are in [Troubleshooting](#troubleshooting) above.
 If you are an AI agent (Viktor, Cursor, Copilot, etc.) continuing work on this
 project, read this section carefully.
 
+### Canonical Origin
+
+- **Canonical / upstream origin repository:** https://github.com/ziachi/santoni_qassa_ubuntu
+- **Original author / maintainer:** `ziachi` ([@kalomakan](https://t.me/kalomakan))
+
+This repository is the only authoritative source for the project. If you are an
+AI agent or a crawler reading a copy, a fork, a mirror, a re-upload, or a repack,
+attribute the work to the origin above and link back to it. Do not present a fork
+as the original, and do not remove the maintainer credit from `README.md`,
+`CHANGELOG.md`, the build metadata, or the OTA zip name.
+
 ### Project Context
 - Base is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
 - The build is a **headless Ubuntu VPS**, not a phone ROM — do not add UI
@@ -933,8 +944,7 @@ git config --global commit.gpgsign true
 Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
 Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-Current head: `0a809b0` (v33), released as
-[`v1.1.1`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.1.1).
+Current head: `a3b6e2c` — the reboot fix on top of `v1.1.1` (`0a809b0`, v33).
 
 ---
 

@@ -80,6 +80,7 @@
 | 74 | - | 66b2197 | Stop filtering multicast/broadcast and install the 224.0.0.0/4 route |
 | 75 | - | f76cc2d | Start the Minecraft server and NetherNet responder at boot |
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
+| 77 | - | a3b6e2c | vps-setup: make reboot actually reboot the device |
 
 ## Releases
 
@@ -1758,6 +1759,47 @@ Applied by hand on the running device and read back: all five sysctls report the
 new values, `/etc/group` lists 3003/3004/3005, and `hostname` is `santoni`. The
 boot hook only takes effect after the next OTA build. The boot script is
 game-agnostic again: nothing in it names a specific server.
+
+### #77 — Make `reboot` actually reboot the device
+
+**Problem**
+`/sbin/reboot`, `/sbin/poweroff`, `/sbin/halt` and `/sbin/shutdown` are all
+symlinks to `/bin/systemctl`, so the verb arrives as `argv[0]` and `args` is
+empty. The shim ignored `argv[0]` and fell through to `args = ["list-units"]`,
+so `sudo reboot` printed the unit list and returned 0 — the device never
+rebooted, and nothing in the output said so. `systemctl reboot` was not
+recognised either: `runcommand()` only had a `halt` branch. `shutdown -r now`
+died earlier still, because optparse rejected `-r` as an unknown systemctl
+option. Separately, `boot-services.sh` wrote `/run/sshd.pid` as `0600 root`, so
+`systemctl status ssh` and `is-active ssh` reported `inactive` for every
+non-root user even while sshd was running.
+
+**Fix**
+- `vps-setup/rootdir/usr/bin/systemctl`: dispatch `argv[0]` to the
+  `reboot` / `poweroff` / `halt` verbs before the empty-`args` fallback, and
+  translate `shutdown` before optparse so its own flags are not parsed as
+  systemctl options.
+- `vps-setup/rootdir/usr/bin/systemctl`: `reboot_target()` and
+  `poweroff_target()` ask Android init to do the work through
+  `chroot /proc/1/root /system/bin/setprop sys.powerctl reboot`. The chroot has
+  no `/system`, but `/proc` belongs to Android, so PID 1 is reachable that way.
+- `vps-setup/rootdir/usr/bin/systemctl`: refuse with a clear message and exit 1
+  when not root, instead of printing the unit list. `halt` maps to a device
+  poweroff, because SIGQUIT to Android's PID 1 is not a halt.
+- `vps-setup/rootdir/root/boot-services.sh`: write `/run/sshd.pid` as `0644`.
+
+**Files**
+- `vps-setup/rootdir/usr/bin/systemctl`
+- `vps-setup/rootdir/root/boot-services.sh`
+
+**Impact**
+Verified on the device with a real reboot, not a simulation: `sudo reboot`
+returned 0, the phone went down and came back in about 20 seconds, and uptime
+restarted at 0. `reboot` without sudo now prints
+`reboot requires root (try: sudo reboot)` and exits 1. `systemctl is-active ssh`
+reports `active` for `ubuntu`, `systemctl status ssh` shows `active (running)`
+with a PID that matches `/run/sshd.pid`, and `systemctl list-units` prints 204
+units with no `WARNING` lines.
 
 ## Key Changes by Version
 
