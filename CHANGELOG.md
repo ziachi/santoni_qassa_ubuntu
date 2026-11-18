@@ -84,7 +84,7 @@
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
 | 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
 | 80 | - | 589b939 | vps-setup: start cron at boot so crontab jobs actually run |
-| 81 | - | - | vps-setup: give cron.service a PIDFile so is-active reports it |
+| 81 | - | 28c0686 | vps-setup: give cron.service a PIDFile so is-active reports it |
 
 ## Releases
 
