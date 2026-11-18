@@ -131,13 +131,24 @@ while IFS= read -r rel; do
     case "$rel" in
         home/ubuntu/*)          mode=644; owner=ubuntu:ubuntu ;;
         etc/sudoers.d/*)        mode=440; owner=root:root ;;
-        usr/bin/systemctl|usr/sbin/sshd|usr/sbin/policy-rc.d|usr/sbin/runlevel|usr/local/bin/journalctl|root/*.sh)
+        usr/bin/systemctl|usr/sbin/sshd|usr/sbin/policy-rc.d|usr/sbin/runlevel|usr/local/bin/journalctl|usr/local/sbin/*.sh)
                                 mode=755; owner=root:root ;;
         *)                      mode=644; owner=root:root ;;
     esac
     put_file "$OVERLAY/$rel" "/$rel" "$mode" "$owner"
     printf '  %-52s %s %s\n' "/$rel" "$mode" "$owner"
 done < <(cd "$OVERLAY" && find . -type f | sed 's|^\./||' | sort)
+
+# The boot scripts used to live in /root, where an operator tidying up the home
+# directory could delete them. They are installed from usr/local/sbin now, so
+# drop the old copies: a device that ran an older apply.sh converges instead of
+# keeping a stale duplicate next to the dotfiles.
+for legacy in /root/boot-services.sh /root/suid-mount.sh; do
+    if [ -e "$legacy" ]; then
+        rm -f "$legacy"
+        echo "  removed legacy $legacy"
+    fi
+done
 
 # sudo refuses to run at all when /etc/sudoers.d is group- or world-writable,
 # and `mkdir -p` creates a missing directory with the ambient umask. Pin the
@@ -174,7 +185,7 @@ done
 
 # ---------------------------------------------------------------- 7. suid mount
 say "7. install the suid bind mounts"
-[ -x /root/suid-mount.sh ] && /root/suid-mount.sh
+[ -x /usr/local/sbin/suid-mount.sh ] && /usr/local/sbin/suid-mount.sh
 # Print the mount point, its source and its options. The old
 # `sed 's/ .*ext4/ ext4/'` was greedy: it ate the mount point and every option,
 # so the check printed the userdata line four times and never showed whether

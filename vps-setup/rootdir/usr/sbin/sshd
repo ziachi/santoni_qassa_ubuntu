@@ -3,11 +3,11 @@
 # init.ubuntu.sh starts sshd directly from inside the chroot, so this is the
 # only hook guaranteed to run on every boot. Re-establish the suid bind mounts
 # before the daemon can accept a login.
-[ -x /root/suid-mount.sh ] && /root/suid-mount.sh >/dev/null 2>&1
+[ -x /usr/local/sbin/suid-mount.sh ] && /usr/local/sbin/suid-mount.sh >/dev/null 2>&1
 # Only the bare boot invocation starts the enabled units. `sshd -t` (run by
 # ssh.service's ExecStartPre) and `sshd -D` must not, or systemctl default
 # would re-enter this wrapper forever.
 if [ $# -eq 0 ]; then
-    ( sleep 5; [ -x /root/boot-services.sh ] && /root/boot-services.sh ) >/dev/null 2>&1 &
+    ( sleep 5; [ -x /usr/local/sbin/boot-services.sh ] && /usr/local/sbin/boot-services.sh ) >/dev/null 2>&1 &
 fi
 exec /usr/sbin/sshd.real "$@"

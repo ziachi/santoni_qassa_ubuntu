@@ -704,14 +704,21 @@ The last lines say whether sshd actually came up: `sshd started` followed by
 
 ### Chroot boot services: `boot-services.sh`
 
-`/usr/sbin/sshd` is a wrapper that runs `/root/boot-services.sh` five seconds
-after sshd comes up, so the chroot needs no change in `init.ubuntu.sh`. The
-script is idempotent and safe to run by hand; it logs to
+`/usr/sbin/sshd` is a wrapper that runs `/usr/local/sbin/boot-services.sh` five
+seconds after sshd comes up, so the chroot needs no change in `init.ubuntu.sh`.
+The script is idempotent and safe to run by hand; it logs to
 `/var/log/boot-services.log`.
+
+Both scripts live in `/usr/local/sbin`, not in `/root`. Root's home is the first
+thing an operator sees after `ssh root@...`, and a `rm -rf ~/*` there used to
+delete the boot path along with it. `/usr/local/sbin` is the FHS location for
+locally installed admin programs: it is on root's `PATH`, it stays out of the
+home directory, and it is outside `/usr/bin` and `/usr/sbin`, so the suid
+re-bind does not touch it.
 
 | Step | What it does |
 |---|---|
-| Mounts | `/root/suid-mount.sh` re-applies the setuid mounts the chroot needs |
+| Mounts | `/usr/local/sbin/suid-mount.sh` re-applies the setuid mounts the chroot needs |
 | systemd marker | creates `/run/systemd/system` (0755), which installers check before they use `systemctl` |
 | sshd pidfile | rewrites `/run/sshd.pid` from the live listener, before and after `systemctl default`, and keeps it `0644` so non-root users can read it |
 | cron | `systemctl enable cron` + `systemctl start cron` when the unit or the init script exists, so `crontab` jobs actually run; `cron.service.d/pidfile.conf` points the shim at `/run/crond.pid` so `is-active` sees it |

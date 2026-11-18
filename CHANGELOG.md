@@ -85,6 +85,7 @@
 | 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
 | 80 | - | 589b939 | vps-setup: start cron at boot so crontab jobs actually run |
 | 81 | - | 28c0686 | vps-setup: give cron.service a PIDFile so is-active reports it |
+| 82 | - | - | vps-setup: move the boot scripts out of /root |
 
 ## Releases
 
@@ -1934,6 +1935,46 @@ Verified on the device. `systemctl is-active cron` returns `active` with exit 0
 and `systemctl status cron` shows `Active: active (running)` with the drop-in
 listed. The check survives a reboot, because the drop-in lives in `/etc` on
 `/data` and cron rewrites `/run/crond.pid` on every start.
+
+### #82 — Move the boot scripts out of `/root`
+
+**Problem**
+`boot-services.sh` and `suid-mount.sh` lived in `/root`, so they were the first
+two entries in `dir` after `ssh root@192.168.110.171`. Root's home is also the
+directory an operator clears out when tidying up, and `rm -rf ~/*` there would
+have deleted the scripts that re-apply the suid bind mounts and start cron, the
+systemd marker directory and the CPU governor. The next boot would then come up
+without sudo, without cron and with the governor pinned.
+
+**Fix**
+- Moved both scripts to `/usr/local/sbin/`, the FHS location for locally
+  installed system administration programs. It is on root's `PATH`, it is not
+  visible in `/root`, and it is outside `/usr/bin` and `/usr/sbin`, so the suid
+  re-bind does not touch it.
+- `vps-setup/rootdir/usr/sbin/sshd`: the wrapper now calls
+  `/usr/local/sbin/suid-mount.sh` and `/usr/local/sbin/boot-services.sh`.
+- `vps-setup/rootdir/usr/local/sbin/boot-services.sh`: calls
+  `/usr/local/sbin/suid-mount.sh` instead of `/root/suid-mount.sh`.
+- `vps-setup/apply.sh`: installs `usr/local/sbin/*.sh` as `0755 root:root`, runs
+  the new `suid-mount.sh` path in step 7, and removes the legacy
+  `/root/boot-services.sh` and `/root/suid-mount.sh` so a device that ran an
+  older `apply.sh` converges instead of keeping a stale duplicate.
+- `qassa_santoni.mk`: the product copy list points at the new paths.
+
+**Files**
+- `vps-setup/rootdir/usr/local/sbin/boot-services.sh` (moved from `rootdir/root/`)
+- `vps-setup/rootdir/usr/local/sbin/suid-mount.sh` (moved from `rootdir/root/`)
+- `vps-setup/rootdir/usr/sbin/sshd`
+- `vps-setup/apply.sh`
+- `qassa_santoni.mk`
+- `CHANGELOG.md`
+- `README.md`
+
+**Impact**
+Verified on the device. `dir` in `/root` after a real `sudo reboot` lists only
+the dotfiles, and `systemctl is-active ssh`, `systemctl is-active cron`,
+`mount --rbind / /`, `/run/systemd/system` at `0755` and the `schedutil`
+governor all still come up from the new path.
 
 ## Key Changes by Version
 

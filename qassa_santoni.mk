@@ -155,7 +155,7 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd:system/etc/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd \
     device/xiaomi/santoni/vps-setup/rootdir/root/.bashrc:system/etc/vps-setup/rootdir/root/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/root/.profile:system/etc/vps-setup/rootdir/root/.profile \
-    device/xiaomi/santoni/vps-setup/rootdir/root/boot-services.sh:system/etc/vps-setup/rootdir/root/boot-services.sh \
-    device/xiaomi/santoni/vps-setup/rootdir/root/suid-mount.sh:system/etc/vps-setup/rootdir/root/suid-mount.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/boot-services.sh:system/etc/vps-setup/rootdir/usr/local/sbin/boot-services.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/suid-mount.sh:system/etc/vps-setup/rootdir/usr/local/sbin/suid-mount.sh \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.bashrc:system/etc/vps-setup/rootdir/home/ubuntu/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile

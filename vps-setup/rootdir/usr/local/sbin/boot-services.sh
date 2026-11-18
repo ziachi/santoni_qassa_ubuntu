@@ -3,9 +3,13 @@
 # Run automatically by the /usr/sbin/sshd wrapper 5 seconds after sshd comes up,
 # so it needs no change in init.ubuntu.sh. Idempotent, safe to run by hand at
 # any time.
+#
+# Lives in /usr/local/sbin, not /root: root's home is the first thing an
+# operator sees after `ssh root@...`, and clearing it out used to take the boot
+# path with it.
 exec >>/var/log/boot-services.log 2>&1
 echo "[$(date -Is)] boot-services: start"
-/root/suid-mount.sh
+/usr/local/sbin/suid-mount.sh
 
 # Third-party installers check [ -d /run/systemd/system ] or sd_booted() to
 # decide whether this host is systemd. Without that directory many installers
