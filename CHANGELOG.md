@@ -91,6 +91,7 @@
 | 85 | - | - | vps-setup: install iproute2, it was never in VPS_PACKAGES |
 | 86 | - | - | vps-setup: start cron even when a stale pidfile survives reboot |
 | 87 | - | - | vps-setup: make crond.pid readable so is-active works for non-root |
+| 88 | - | - | docs: add index README inside docs directory |
 
 ## Releases
 
@@ -2121,3 +2122,21 @@ wait for the file to appear.
 
 **Impact.** `systemctl is-active cron` and `systemctl status cron` report the
 real state for `ubuntu` as well as `root`.
+
+### #88 — `docs/` had no landing page
+
+**Problem.** `docs/` held three long reference files — `ARCHITECTURE.md`,
+`VPS-SETUP.md`, `BUILD.md` — plus `bug-analysis/` and `screenshots/`. Opening
+the folder on GitHub showed a bare file list: nothing said which file answers
+which question, and `README.md` linked each file individually, so the folder
+itself was never a destination.
+
+**Fix.** Add `docs/README.md` as the folder index — a short summary of what the
+folder is for, a navigation table with one line per file, the supporting
+material, and a "where to start" list — and point the `## Documentation` table in
+`README.md` at it.
+
+**Files.** `docs/README.md`, `README.md`, `CHANGELOG.md`.
+
+**Impact.** `docs/` renders as a readable page on GitHub, and the README links
+the index instead of leaving the folder unlinked.

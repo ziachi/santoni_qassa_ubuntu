@@ -205,8 +205,12 @@ assembled — boot sequence, package removal, hardware bridges — is in
 
 ## Documentation
 
+This README is the quick start. The deep-dive reference lives in
+[`docs/`](docs/README.md), which indexes the three files below.
+
 | File | Contents |
 |---|---|
+| [docs/](docs/README.md) | index of the deep-dive reference: what each file answers |
 | [docs/BUILD.md](docs/BUILD.md) | full build guide, signing keys, cheat sheet, build errors |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | boot sequence, package removal, bridges, kernel options |
 | [docs/VPS-SETUP.md](docs/VPS-SETUP.md) | headless mode, `wifi` CLI, ADB access, troubleshooting |
