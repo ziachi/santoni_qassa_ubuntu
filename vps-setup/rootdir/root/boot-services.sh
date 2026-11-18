@@ -1,24 +1,24 @@
 #!/bin/bash
 # Copyright (c) 2026 ziachi - https://github.com/ziachi/santoni_qassa_ubuntu
-# Dijalankan otomatis oleh wrapper /usr/sbin/sshd 5 detik setelah sshd hidup,
-# jadi tidak butuh perubahan di init.ubuntu.sh. Idempoten, aman dijalankan
-# manual kapan saja.
+# Run automatically by the /usr/sbin/sshd wrapper 5 seconds after sshd comes up,
+# so it needs no change in init.ubuntu.sh. Idempotent, safe to run by hand at
+# any time.
 exec >>/var/log/boot-services.log 2>&1
 echo "[$(date -Is)] boot-services: start"
 /root/suid-mount.sh
 
-# Installer pihak ketiga mengecek [ -d /run/systemd/system ] atau sd_booted()
-# untuk memutuskan apakah host ini systemd. Tanpa direktori itu, banyak
-# installer jatuh ke jalur non-systemd (sysvinit/openrc) dan melewatkan
-# systemctl sepenuhnya.
+# Third-party installers check [ -d /run/systemd/system ] or sd_booted() to
+# decide whether this host is systemd. Without that directory many installers
+# fall back to the non-systemd path (sysvinit/openrc) and skip systemctl
+# entirely.
 mkdir -p /run/systemd/system 2>/dev/null
 chmod 755 /run/systemd/system 2>/dev/null
 
-# systemctl3.py menentukan status ssh.service dari PIDFile. sshd menulis file itu
-# saat daemonize, tapi di awal boot bisa ter-truncate jadi 0 byte (sshd kedua yang
-# gagal bind :22). Tulis ulang dari listener yang benar-benar hidup, sebelum dan
-# sesudah `systemctl default`, supaya status tidak "inactive (dead)" dan systemctl
-# tidak mencoba menyalakan sshd kedua.
+# systemctl3.py derives ssh.service status from PIDFile. sshd writes that file
+# when it daemonizes, but early in boot it can be truncated to 0 bytes (a second
+# sshd that failed to bind :22). Rewrite it from the listener that is actually
+# alive, before and after `systemctl default`, so the status is not
+# "inactive (dead)" and systemctl does not try to start a second sshd.
 assert_sshd_pid() {
     pid=$(pgrep -f 'sshd.*\[listener\]' | head -1)
     if [ -n "$pid" ]; then
@@ -34,7 +34,7 @@ assert_sshd_pid
 /usr/bin/systemctl default
 assert_sshd_pid
 
-# Governor adaptif, bukan performance. This device runs without a heatsink, and
+# Adaptive governor, not performance. This device runs without a heatsink, and
 # `performance` pins every core at its maximum frequency even at idle. schedutil
 # scales with load and drops back when the box is quiet, while the kernel's own
 # thermal throttling (apc1-cpu*-step, cpuss0-step) stays in charge. All eight

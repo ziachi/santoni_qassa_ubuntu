@@ -56,7 +56,7 @@ put_file() {
     mv -f "$tmp" "$dst"
 }
 
-# ---------------------------------------------------------------- 1. groups
+# -------------------------------------------------------------------- 1. groups
 say "1. Android network groups"
 add_group() { getent group "$1" >/dev/null 2>&1 || groupadd -g "$2" "$1"; }
 add_group aid_inet 3003
@@ -64,7 +64,7 @@ add_group aid_net_raw 3004
 add_group aid_sdcard_rw 1015
 getent group aid_inet aid_net_raw aid_sdcard_rw
 
-# ------------------------------------------------------------------ 2. user
+# ---------------------------------------------------------------------- 2. user
 say "2. user ubuntu"
 id ubuntu >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash -U ubuntu
 usermod -aG sudo,aid_inet,aid_net_raw,aid_sdcard_rw ubuntu
@@ -97,29 +97,29 @@ set_ubuntu_password "$UBUNTU_USER_PASS"
 printf '  password -> %s\n' "$UBUNTU_USER_PASS"
 printf '  passwd   -> %s\n' "$(passwd_state ubuntu)"
 
-# --------------------------------------------------------------- 3. backups
-say "3. backup binary asli sebelum ditimpa wrapper"
+# ------------------------------------------------------------------- 3. backups
+say "3. back up the original binaries before the wrappers replace them"
 # systemctl.orig and sshd.real are package binaries, so they are not committed.
 # They are captured here, once, before the overlay replaces them.
 if [ ! -e /usr/bin/systemctl.orig ] && is_elf /usr/bin/systemctl; then
     cp -a /usr/bin/systemctl /usr/bin/systemctl.orig
-    echo "  systemctl.orig dibuat"
+    echo "  systemctl.orig created"
 elif [ -e /usr/bin/systemctl.orig ]; then
-    echo "  systemctl.orig sudah ada"
+    echo "  systemctl.orig already present"
 else
-    echo "  systemctl bukan ELF, systemctl.orig dilewati"
+    echo "  systemctl is not an ELF, systemctl.orig skipped"
 fi
 if [ ! -e /usr/sbin/sshd.real ] && is_elf /usr/sbin/sshd; then
     cp -a /usr/sbin/sshd /usr/sbin/sshd.real
-    echo "  sshd.real dibuat"
+    echo "  sshd.real created"
 elif [ -e /usr/sbin/sshd.real ]; then
-    echo "  sshd.real sudah ada"
+    echo "  sshd.real already present"
 else
-    echo "  sshd bukan ELF, sshd.real dilewati"
+    echo "  sshd is not an ELF, sshd.real skipped"
 fi
 
-# ---------------------------------------------------------------- 4. overlay
-say "4. salin overlay"
+# ------------------------------------------------------------------- 4. overlay
+say "4. copy the overlay"
 while IFS= read -r rel; do
     case "$rel" in
         home/ubuntu/*)          mode=644; owner=ubuntu:ubuntu ;;
@@ -142,7 +142,7 @@ for d in /etc/sudoers.d /etc/systemd/system/ssh.service.d; do
     chown root:root "$d"
 done
 
-# ------------------------------------------------------- 5. editor + locale
+# ----------------------------------------------------------- 5. editor + locale
 say "5. editor default + locale"
 if [ -x /usr/bin/nano ]; then
     update-alternatives --set editor /usr/bin/nano >/dev/null 2>&1 || true
@@ -156,8 +156,8 @@ fi
 printf '  editor -> %s\n' "$(readlink -f /usr/bin/editor 2>/dev/null || echo '?')"
 printf '  LANG   -> %s\n' "$(sed -n 's/^LANG=//p' /etc/default/locale 2>/dev/null | head -1)"
 
-# ------------------------------------------------------------ 6. unit disable
-say "6. disable unit yang tidak dipakai"
+# -------------------------------------------------------------- 6. unit disable
+say "6. disable unused units"
 for u in e2scrub_reap.service networkd-dispatcher.service systemd-resolved.service; do
     if [ -e "/etc/systemd/system/$u" ] || [ -e "/lib/systemd/system/$u" ] || [ -e "/usr/lib/systemd/system/$u" ]; then
         systemctl disable "$u" >/dev/null 2>&1 || true
@@ -165,23 +165,23 @@ for u in e2scrub_reap.service networkd-dispatcher.service systemd-resolved.servi
     fi
 done
 
-# --------------------------------------------------------------- 7. suid mount
-say "7. pasang suid bind mount"
+# ---------------------------------------------------------------- 7. suid mount
+say "7. install the suid bind mounts"
 [ -x /root/suid-mount.sh ] && /root/suid-mount.sh
 # Print the mount point, its source and its options. The old
 # `sed 's/ .*ext4/ ext4/'` was greedy: it ate the mount point and every option,
 # so the check printed the userdata line four times and never showed whether
 # the suid bind mounts were actually in place.
 awk '$2 == "/usr/bin" || $2 == "/usr/sbin" { printf "  %-10s %s  %s\n", $2, $1, $4 }' /proc/mounts
-grep -qE ' /usr/(bin|sbin) ' /proc/mounts || echo "  (belum terpasang)"
+grep -qE ' /usr/(bin|sbin) ' /proc/mounts || echo "  (not mounted yet)"
 
 # systemctl3.py reads PIDFile for status; a stale or empty file reports the
 # running sshd as inactive and makes `systemctl default` try a second one.
 pid=$(pgrep -f 'sshd.*\[listener\]' | head -1 || true)
 [ -n "${pid:-}" ] && echo "$pid" > /run/sshd.pid
 
-# ---------------------------------------------------------------- 8. verifikasi
-say "8. verifikasi"
+# -------------------------------------------------------------------- 8. verify
+say "8. verify"
 # sshd is started by init.ubuntu.sh on boot and by vps-setup right after this
 # script on a fresh install, so the unit can legitimately still be inactive
 # here. Report the daemon itself: `systemctl status ssh` printed
@@ -200,4 +200,4 @@ else
 fi
 
 echo
-echo "apply.sh: selesai"
+echo "apply.sh: done"

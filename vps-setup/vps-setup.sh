@@ -376,9 +376,10 @@ chmod 600 "$UBUNTU_USER_PASS_FILE" 2>/dev/null
 chown 0:0 "$UBUNTU_USER_PASS_FILE" 2>/dev/null
 
 # ------------------------------------------------- 6b. chroot overlay (rootdir)
-# apply.sh memasang user ubuntu, sudo lewat suid bind mount, systemctl
-# replacement, policy-rc.d, runlevel shim, journalctl wrapper, dan hook boot.
-# Overlay dipasang ke /system/etc/vps-setup lewat PRODUCT_COPY_FILES.
+# apply.sh installs the ubuntu user, sudo through the suid bind mount, the
+# systemctl replacement, policy-rc.d, the runlevel shim, the journalctl wrapper,
+# and the boot hook. The overlay is installed to /system/etc/vps-setup through
+# PRODUCT_COPY_FILES.
 OVERLAY_SRC=/system/etc/vps-setup
 if [ -d "$OVERLAY_SRC" ]; then
     echo "[6b/7] Applying the chroot overlay"
