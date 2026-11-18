@@ -244,6 +244,14 @@ mkdir -p "$UBUNTU_ROOT/dev" "$UBUNTU_ROOT/proc" "$UBUNTU_ROOT/sys" \
 if mount -o rbind /dev "$UBUNTU_ROOT/dev" 2>/dev/null; then
     mount -o rslave "$UBUNTU_ROOT/dev" 2>/dev/null
 fi
+# The rbind can land as a bare tmpfs holding only null and pts, which makes
+# every open of /dev/null fail with EACCES. sshd then dies with
+# "cannot open /dev/null: Permission denied" and the setup reports
+# "sshd failed to start" even though the overlay applied cleanly. Verify the
+# node is actually usable and re-bind if it is not.
+if ! ( : > "$UBUNTU_ROOT/dev/null" ) 2>/dev/null; then
+    mount -o rbind /dev "$UBUNTU_ROOT/dev" 2>/dev/null
+fi
 # The rbind does not bring /dev/pts on this device, and without devpts
 # posix_openpt fails with ENODEV: apt cannot open its log, and sshd cannot give
 # a session a pty ("PTY allocation request failed on channel 0").
