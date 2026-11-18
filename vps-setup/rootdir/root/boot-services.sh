@@ -19,4 +19,24 @@ assert_sshd_pid() {
 assert_sshd_pid
 /usr/bin/systemctl default
 assert_sshd_pid
+
+# Governor adaptif, bukan performance. This device runs without a heatsink, and
+# `performance` pins every core at its maximum frequency even at idle. schedutil
+# scales with load and drops back when the box is quiet, while the kernel's own
+# thermal throttling (apc1-cpu*-step, cpuss0-step) stays in charge. All eight
+# cores are left online; nothing here parks them.
+set_cpu_governor() {
+    gov=""
+    for g in schedutil interactive ondemand; do
+        if grep -qw "$g" /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors 2>/dev/null; then
+            gov=$g
+            break
+        fi
+    done
+    [ -n "$gov" ] || return 0
+    for c in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do
+        [ -w "$c" ] && echo "$gov" > "$c" 2>/dev/null
+    done
+}
+set_cpu_governor
 echo "[$(date -Is)] boot-services: done"
