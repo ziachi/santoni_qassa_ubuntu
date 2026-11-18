@@ -21,3 +21,13 @@ done
 if ! grep -qE "^[^ ]+ / " /proc/mounts; then
     mount --bind / / 2>/dev/null
 fi
+
+# /dev/shm is a tmpfs on a normal Linux box. The Android /dev rbind does not
+# bring one, and anything that uses shared memory (Python multiprocessing,
+# Chromium, PostgreSQL) fails without it. Idempotent: skipped when the mount
+# is already there.
+mkdir -p /dev/shm 2>/dev/null
+chmod 1777 /dev/shm 2>/dev/null
+if ! grep -q " /dev/shm " /proc/mounts; then
+    mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm 2>/dev/null
+fi

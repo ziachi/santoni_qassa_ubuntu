@@ -12,6 +12,7 @@ echo "[$(date -Is)] boot-services: start"
 # installer jatuh ke jalur non-systemd (sysvinit/openrc) dan melewatkan
 # systemctl sepenuhnya.
 mkdir -p /run/systemd/system 2>/dev/null
+chmod 755 /run/systemd/system 2>/dev/null
 
 # systemctl3.py menentukan status ssh.service dari PIDFile. sshd menulis file itu
 # saat daemonize, tapi di awal boot bisa ter-truncate jadi 0 byte (sshd kedua yang
