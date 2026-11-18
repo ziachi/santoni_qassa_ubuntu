@@ -82,7 +82,7 @@
 | 76 | - | 4704dcb | Tune kernel network limits and chroot net groups for game servers |
 | 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
-| 79 | - | - | vps-setup: give root the Android network groups and quiet the ssh condition |
+| 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
 
 ## Releases
 

@@ -772,6 +772,7 @@ They stay in the tree because they are harmless.
 | `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
 | `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
 | `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
+| `ping` says `socket: Permission denied` inside the chroot | the kernel is built with `CONFIG_ANDROID_PARANOID_NETWORK`, which gates `socket()` on the caller's GID and ignores `cap_net_raw`, so a user outside `aid_inet` (3003) and `aid_net_raw` (3004) cannot open a socket at all — name resolution fails the same way, as `Temporary failure in name resolution` | fixed in #79; on an older build run `chroot /data/ubuntu /usr/sbin/usermod -aG aid_inet,aid_net_raw root` and log in again |
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
 | `system_server` crash-loops after boot | SurfaceFlinger is disabled | see the note above — drop the `surfaceflinger` override |
 
@@ -944,7 +945,7 @@ git config --global commit.gpgsign true
 Full history lives in [CHANGELOG.md](CHANGELOG.md): one section per change with
 Problem / Fix / Files / Impact, plus the `## Commits` index table.
 
-Current head: `9c3e48e` — the English-only vps-setup messages on top of the reboot fix (`86e92b5`) and `v1.1.1` (`0a809b0`, v33).
+Current head: `9c30a45` — the root network-group fix on top of the English-only vps-setup messages (`9c3e48e`), the reboot fix (`86e92b5`) and `v1.1.1` (`0a809b0`, v33).
 
 ---
 
