@@ -23,6 +23,7 @@ import glob
 import errno
 import collections
 import shlex
+import subprocess
 import fnmatch
 import re
 from types import TracebackType
@@ -3088,6 +3089,11 @@ class Systemctl:
             return default
         if self.truncate_old(pid_file):
             return default
+        # root's /run/sshd.pid is not readable by ubuntu, and that is not an
+        # error: the caller only wants the pid, and there is none to give.
+        if not os.access(pid_file, os.R_OK):
+            logg.log(DEBUG_BOOTTIME, "  pid file %s is not readable, ignored", o22(pid_file))
+            return default
         try:
             # some pid-files from applications contain multiple lines
             with open(pid_file) as f:
@@ -3352,6 +3358,13 @@ class Systemctl:
                         break
         except (OSError, ValueError):
             pass
+        # A pidfile owned by another user (root's /run/sshd.pid read by ubuntu)
+        # cannot be truncated, and that is not worth a warning: the caller only
+        # wants to know whether the pid inside is still alive.
+        if not os.access(filename, os.W_OK):
+            logg.log(DEBUG_BOOTTIME, "  file time: %s (%s)", datetime.datetime.fromtimestamp(filetime), o22(filename))
+            logg.log(DEBUG_BOOTTIME, "  boot time: %s (%s)", datetime.datetime.fromtimestamp(boottime), "not writable, kept")
+            return False # not truncated
         try:
             logg.log(DEBUG_BOOTTIME, "  file time: %s (%s)", datetime.datetime.fromtimestamp(filetime), o22(filename))
             logg.log(DEBUG_BOOTTIME, "  boot time: %s (%s)", datetime.datetime.fromtimestamp(boottime), "status TRUNCATED NOW")
@@ -6539,6 +6552,41 @@ class Systemctl:
         except OSError as e:
             logg.warning("SIGQUIT to init-loop on PID-1 >> %s", e)
         return done
+    def android_powerctl(self, action: str, label: str = "") -> bool:
+        """Ask Android's init to reboot or power off the device.
+
+        The chroot has no /system of its own, but /proc is Android's, so
+        /proc/1/root is Android's real root. Chrooting there reaches toybox's
+        setprop, which talks to init over the property socket; sys.powerctl is
+        how init is asked for a clean reboot or shutdown.
+        """
+        label = label or action
+        if os.geteuid() != 0:
+            logg.error("%s requires root (try: sudo %s)", label, label)
+            return False
+        android_root = "/proc/1/root"
+        if not os.path.exists(os.path.join(android_root, "system/bin/setprop")):
+            logg.error("cannot reach Android init (%s/system/bin/setprop missing)", android_root)
+            return False
+        cmd = ["/usr/sbin/chroot", android_root, "/system/bin/setprop", "sys.powerctl", action]
+        logg.info("android powerctl: %s", " ".join(cmd))
+        try:
+            rc = subprocess.call(cmd)
+        except OSError as e:
+            logg.error("android powerctl failed >> %s", e)
+            return False
+        if rc != 0:
+            logg.error("android powerctl exited %i", rc)
+            return False
+        return True
+    def reboot_target(self) -> bool:
+        """ reboot -- reboot the device through Android's init """
+        logg.info("system reboot requested")
+        return self.android_powerctl("reboot", "reboot")
+    def poweroff_target(self) -> bool:
+        """ poweroff -- power off the device through Android's init """
+        logg.info("system poweroff requested")
+        return self.android_powerctl("shutdown", "poweroff")
     def system_get_default(self) -> str:
         """ get current default run-level"""
         return self.get_default_target()
@@ -7198,6 +7246,10 @@ def runcommand(command: str, *modules: str) -> int:
         print_str(systemctl.unitfiles.get_preset_of_unit(*modules))
     elif command in ["halt"]:
         exitcode = is_not_ok(systemctl.halt_target())
+    elif command in ["poweroff"]:
+        exitcode = is_not_ok(systemctl.poweroff_target())
+    elif command in ["reboot"]:
+        exitcode = is_not_ok(systemctl.reboot_target())
     elif command in ["init"]:
         exitcode = is_not_ok(systemctl.init_modules(*modules))
     elif command in ["is-active"]:
@@ -7318,6 +7370,13 @@ def main() -> int:
     global _extra_vars, _force, _full, _log_lines, _no_pager, _no_reload, _no_legend, _no_ask_password
     global _now, _preset_mode, _quiet, _root, _show_all, _only_state, _only_type, _only_property, _only_what
     global DefaultMaximumTimeout, INIT_MODE, EXIT_MODE, _user_mode, FORCE_IPV4, FORCE_IPV6
+    # shutdown(8) is a symlink to systemctl, and its own flags (-r, -h, -t, -k)
+    # are not systemctl options: optparse rejects them before the verb is
+    # dispatched. Translate the request here and let the verb do the work.
+    if os.path.basename(sys.argv[0]) == "shutdown":
+        _argv = sys.argv[1:]
+        _verb = "reboot" if ("-r" in _argv or "--reboot" in _argv) else "poweroff"
+        sys.argv = [sys.argv[0], _verb]
     import optparse # pylint: disable=deprecated-module # not anymore
     _o = optparse.OptionParser("%prog [options] command [name...]", description=__doc__.strip(),
                                epilog="use 'help' command for more information")
@@ -7497,6 +7556,15 @@ def main() -> int:
     #
     if opt.version:
         args = ["version"]
+    # /sbin/reboot, /sbin/poweroff, /sbin/halt and /sbin/shutdown are symlinks to
+    # systemctl, so the verb arrives as argv[0] and args stays empty. Without
+    # this, `reboot` fell through to list-units: it printed 204 units and the
+    # device never rebooted.
+    prog = os.path.basename(sys.argv[0])
+    if prog in ("reboot", "poweroff"):
+        args = [prog]
+    elif prog == "halt":
+        args = ["poweroff"]
     if not args:
         if INIT_MODE:
             args = ["default"]

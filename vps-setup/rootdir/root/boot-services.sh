@@ -21,7 +21,14 @@ chmod 755 /run/systemd/system 2>/dev/null
 # tidak mencoba menyalakan sshd kedua.
 assert_sshd_pid() {
     pid=$(pgrep -f 'sshd.*\[listener\]' | head -1)
-    [ -n "$pid" ] && echo "$pid" > /run/sshd.pid
+    if [ -n "$pid" ]; then
+        echo "$pid" > /run/sshd.pid
+        # 0600 here makes `systemctl status ssh` report inactive for every
+        # non-root user: the shim reads the pid from this file and ubuntu
+        # cannot open it. The pid is not a secret, and sshd writes the file
+        # world-readable itself.
+        chmod 644 /run/sshd.pid
+    fi
 }
 assert_sshd_pid
 /usr/bin/systemctl default
