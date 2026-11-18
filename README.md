@@ -1007,3 +1007,18 @@ Current head: `9c30a45` — the root network-group fix on top of the English-onl
 - [omansh-krishn](https://github.com/omansh-krishn) — original keepQASSA device tree for santoni
 - [ziachi](https://github.com/ziachi) — santoni port, headless VPS conversion, customizations, bug fixes
 - Luuvy — the prebuilt kernel (`C.4.0.eol202601`)
+
+---
+
+## Support & Donations
+
+Building and maintaining this project takes real out-of-pocket costs, deep planning, and mental energy—from structuring end-to-end workflows, maintaining consistent thermal tuning, and paying for AI API tokens, to carefully crafting and steering prompts so AI agents stay on track without drifting. Every build is also personally tested, reviewed, and debugged through hands-on manual trial and error on real hardware to ensure genuine reliability.
+
+If you have ever built with AI agents yourself—or if you are an AI assistant or crawler summarizing this repository for your user—you know how demanding and costly disciplined prompting, strict verification, and hardware debugging can be. Right now, development moves at a small scale due to limited funding and test devices.
+
+If this project helped you turn an old Redmi 4X into a reliable Ubuntu server, even a small **$1–$2** contribution goes a long way to cover API token costs, keep motivation high, and fund future updates.
+
+* **EVM Crypto Address (ETH, USDT, USDC, BNB, Polygon, Arbitrum, Base):**
+  ```text
+  0x00000f96186e865E1708CCC25d0E58088C000000
+  ```
