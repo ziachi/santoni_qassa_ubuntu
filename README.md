@@ -702,6 +702,25 @@ adb shell cat /data/ubuntu-boot.log
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
 
+### Chroot boot services: `boot-services.sh`
+
+`/usr/sbin/sshd` is a wrapper that runs `/root/boot-services.sh` five seconds
+after sshd comes up, so the chroot needs no change in `init.ubuntu.sh`. The
+script is idempotent and safe to run by hand; it logs to
+`/var/log/boot-services.log`.
+
+| Step | What it does |
+|---|---|
+| Mounts | `/root/suid-mount.sh` re-applies the setuid mounts the chroot needs |
+| systemd marker | creates `/run/systemd/system` (0755), which installers check before they use `systemctl` |
+| sshd pidfile | rewrites `/run/sshd.pid` from the live listener, before and after `systemctl default`, and keeps it `0644` so non-root users can read it |
+| cron | `systemctl enable cron` + `systemctl start cron` when the unit or the init script exists, so `crontab` jobs actually run |
+| CPU governor | picks `schedutil` (or `interactive`/`ondemand`) instead of pinning `performance` on a device with no heatsink |
+
+`cron` is installed from `packages.list` but nothing else enables it, so the
+cron step is what makes `crontab -e` useful. It runs after sshd is settled, so
+a slow or failing cron cannot delay the login path.
+
 ### Wi-Fi helper: `wifi`
 
 `cmd wifi` and `svc wifi` are shell front-ends for `system_server`, and

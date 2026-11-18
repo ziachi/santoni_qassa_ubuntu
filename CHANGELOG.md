@@ -83,6 +83,7 @@
 | 77 | - | 86e92b5 | vps-setup: make reboot actually reboot the device |
 | 78 | - | 9c3e48e | vps-setup: make every message and comment English |
 | 79 | - | 9c30a45 | vps-setup: give root the Android network groups and quiet the ssh condition |
+| 80 | - | - | vps-setup: start cron at boot so crontab jobs actually run |
 
 ## Releases
 
@@ -1873,6 +1874,37 @@ with exit 0 for both users, including with a poisoned
 `/run/ssh.service.status`. The image must be rebuilt for the group change to
 reach a fresh install; on a running device `usermod -aG aid_inet,aid_net_raw
 root` applies it immediately.
+### #80 — Start `cron` at boot so `crontab` jobs actually run
+
+**Problem**
+`cron` is in `vps-setup/packages.list`, so `crontab` and `/etc/init.d/cron`
+were both present, but nothing ever enabled or started the daemon. The unit sat
+at `inactive (dead)` and `disabled`, so a job written with `crontab -e` was
+accepted and then never ran. The same audit confirmed the rest of the chroot was
+healthy: `systemctl is-active ssh` returned `active` for both `root` and
+`ubuntu`, `ping` reported 0% packet loss for both, and `apt-get update` was
+clean.
+
+**Fix**
+- `vps-setup/rootdir/root/boot-services.sh`: add `start_cron()`, which runs
+  `systemctl enable cron` and `systemctl start cron` when either
+  `/lib/systemd/system/cron.service` or `/etc/init.d/cron` exists. It is called
+  after `assert_sshd_pid` and `systemctl default`, so sshd is already settled
+  and a slow or failing cron cannot delay the login path. Both calls are
+  idempotent, so running the script by hand stays safe.
+
+**Files**
+- `vps-setup/rootdir/root/boot-services.sh`
+
+**Impact**
+Verified on the device, not simulated. After `sudo reboot` the device came back
+on the network, `systemctl is-active cron` returned `active` with exit 0, and
+`ps aux` showed the daemon. A real job — `* * * * * touch /tmp/cron_ok` — was
+installed with `crontab`, `/tmp/cron_ok` appeared within the minute, and both
+the job and the file were removed afterwards. `systemctl is-active ssh` still
+returns `active` and `ping` still reports 0% packet loss for `root` and
+`ubuntu`, so the new step did not disturb the existing boot path.
+
 
 ## Key Changes by Version
 
