@@ -387,6 +387,15 @@ if netstat -tln 2>/dev/null | grep -q ':22 '; then
 elif [ -x "$UBUNTU_ROOT/usr/sbin/sshd" ]; then
     # /run lives on /data, so a stale pid file can name an unrelated process.
     rm -f "$UBUNTU_ROOT/run/sshd.pid"
+    # sshd daemonizes by reopening its stdio on /dev/null, and ssh-keygen opens
+    # it too. If the /dev rbind above did not come up, both print
+    # "Couldn't open /dev/null: No such file or directory" and the setup log
+    # reads like a failure even though sshd started fine. Make sure the node
+    # exists before either runs.
+    if [ ! -e "$UBUNTU_ROOT/dev/null" ]; then
+        mkdir -p "$UBUNTU_ROOT/dev"
+        mknod -m 666 "$UBUNTU_ROOT/dev/null" c 1 3 2>/dev/null || true
+    fi
     if chroot "$UBUNTU_ROOT" /bin/sh -c \
             'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
              export TMPDIR=/tmp
