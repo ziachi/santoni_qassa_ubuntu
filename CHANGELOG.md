@@ -88,6 +88,7 @@
 | 82 | - | - | vps-setup: move the boot scripts out of /root |
 | 83 | - | - | vps-setup: ship cron.service.d/pidfile.conf in the image |
 | 84 | - | - | vps-setup: install cron, it was never in VPS_PACKAGES |
+| 85 | - | - | vps-setup: install iproute2, it was never in VPS_PACKAGES |
 
 ## Releases
 
@@ -2066,3 +2067,19 @@ nor `/etc/init.d/cron` and skipped silently, so the drop-in was orphaned and
 
 **Impact.** `crontab` and `cron.service` now exist, so the boot step can
 enable and start the daemon and the pidfile drop-in has a unit to attach to.
+
+### #85 — `iproute2` was never installed
+
+**Problem.** The end-to-end audit found `ip` and `ss` missing (`command not
+found`, exit 127). `packages.list` — the manifest copied into the image — lists
+`iproute2 5.15.0-1ubuntu2.2`, but no script ever reads that file. `VPS_PACKAGES`
+in `vps-setup.sh` is the list that is actually installed, and it shipped
+`net-tools` (so `netstat` worked) without `iproute2`, so the image advertised a
+package it did not contain.
+
+**Fix.** Add `iproute2` to `VPS_PACKAGES` next to `cron`.
+
+**Files.** `vps-setup/vps-setup.sh`, `README.md`, `CHANGELOG.md`.
+
+**Impact.** `ip a` and `ss -tulnp` now work for `root` and `ubuntu`, and the
+image matches its own `packages.list`.

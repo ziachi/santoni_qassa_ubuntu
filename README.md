@@ -735,6 +735,12 @@ sshd is settled, so a slow or failing cron cannot delay the login path.
 was running. The drop-in gives it the pidfile cron writes itself, which is the
 same trick `ssh.service.d/pidfile.conf` uses for sshd.
 
+`VPS_PACKAGES` in `vps-setup.sh` is the only package list that is installed;
+`packages.list` is copied into the image but no script reads it. `iproute2` was
+missing from `VPS_PACKAGES` even though `packages.list` lists it, so `ip` and
+`ss` were absent while `netstat` from `net-tools` still worked. Both are in the
+list now.
+
 Both drop-ins are shipped in the image by `PRODUCT_COPY_FILES` in
 `qassa_santoni.mk`, alongside the rest of `vps-setup/rootdir`.
 
