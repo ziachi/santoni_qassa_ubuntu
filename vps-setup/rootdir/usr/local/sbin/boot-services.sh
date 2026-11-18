@@ -59,6 +59,14 @@ start_cron() {
         fi
         /usr/bin/systemctl enable cron >/dev/null 2>&1
         /usr/bin/systemctl start cron >/dev/null 2>&1
+        # cron writes /run/crond.pid 0600, so `systemctl is-active cron`
+        # reports inactive for every non-root user: the shim reads the pid from
+        # that file and ubuntu cannot open it. Same fix as sshd.pid above.
+        for _ in 1 2 3 4 5; do
+            [ -f /run/crond.pid ] && break
+            sleep 1
+        done
+        [ -f /run/crond.pid ] && chmod 644 /run/crond.pid 2>/dev/null
     fi
 }
 start_cron

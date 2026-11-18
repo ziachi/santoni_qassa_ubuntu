@@ -747,6 +747,11 @@ Android reuses pids quickly, so a stale `/run/crond.pid` could point at an
 unrelated process and make the cron step skip a daemon that was not running.
 `start_cron` now drops a pidfile that does not name `cron` before starting it.
 
+`cron` writes `/run/crond.pid` `0600`, and the shim reads the pid from that
+file, so `is-active cron` reported `inactive` for `ubuntu` while the daemon was
+running. The pidfile is made `0644` after the start, the same way
+`/run/sshd.pid` is.
+
 Both drop-ins are shipped in the image by `PRODUCT_COPY_FILES` in
 `qassa_santoni.mk`, alongside the rest of `vps-setup/rootdir`.
 

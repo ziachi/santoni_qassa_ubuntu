@@ -90,6 +90,7 @@
 | 84 | - | - | vps-setup: install cron, it was never in VPS_PACKAGES |
 | 85 | - | - | vps-setup: install iproute2, it was never in VPS_PACKAGES |
 | 86 | - | - | vps-setup: start cron even when a stale pidfile survives reboot |
+| 87 | - | - | vps-setup: make crond.pid readable so is-active works for non-root |
 
 ## Releases
 
@@ -2103,3 +2104,20 @@ the same stale file, so the failure was silent.
 
 **Impact.** `cron` starts on every boot, and `is-active` no longer reports a
 dead daemon as active.
+
+### #87 — `is-active cron` said inactive for non-root users
+
+**Problem.** cron writes `/run/crond.pid` `0600`. `systemctl3.py` reads the pid
+from that file, so `ubuntu` could not open it and `systemctl is-active cron`
+returned `inactive` (exit 3) for every non-root user while the daemon was
+running. `ssh.service` had the same problem and was fixed by making its pidfile
+`0644`; cron's pidfile never got the same treatment.
+
+**Fix.** `chmod 644 /run/crond.pid` after `systemctl start cron`, with a short
+wait for the file to appear.
+
+**Files.** `vps-setup/rootdir/usr/local/sbin/boot-services.sh`, `README.md`,
+`CHANGELOG.md`.
+
+**Impact.** `systemctl is-active cron` and `systemctl status cron` report the
+real state for `ubuntu` as well as `root`.
