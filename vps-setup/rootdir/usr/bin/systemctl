@@ -4016,6 +4016,18 @@ class Systemctl:
         doRemainAfterExit = self.unitfiles.get_RemainAfterExit(conf)
         runs = conf.get(Service, "Type", "simple").lower()
         env = self.unitfiles.get_env(conf)
+        # `start` on a unit whose main process is already alive is a no-op that
+        # succeeds, exactly like real systemd. This has to happen before
+        # ExecStartPre: a failing pre-start wrote AS=failed and then called
+        # remove_service_directories(), which deleted the RuntimeDirectory
+        # (/run/sshd) and killed new SSH connections to a daemon that was still
+        # serving them.
+        if runs in ["simple", "exec", "forking", "notify", "idle"]:
+            running = self.is_active_pid(self.read_mainpid_from(conf))
+            if running:
+                logg.warning("the service is already running on PID %s", running)
+                self.write_status_from(conf, AS="active", SubState="running", MainPID=running)
+                return True
         if not self._quiet:
             okee = self.unitfiles.exec_check(conf, env, Service, "Exec") # all...
             if not okee and _no_reload:
@@ -5294,6 +5306,17 @@ class Systemctl:
         if pid_file: # application PIDFile
             if not os.path.exists(pid_file):
                 return "inactive"
+            # A live PIDFile outranks the status file. boot-services.sh calls
+            # `systemctl start ssh` while sshd is already running, and the
+            # ActiveState=failed that left behind made is-active report a dead
+            # daemon that was in fact serving connections.
+            pid = self.is_active_pid(self.read_pid_file(pid_file))
+            if pid:
+                if (self.get_status_from(conf, "ActiveState", "") != "active"
+                        or strE(self.get_status_from(conf, "MainPID", "")) != strE(pid)):
+                    self.write_status_from(conf, AS="active", SubState="running", MainPID=pid)
+                logg.log(DEBUG_STATUS, "pid_file '%s' => PID %s alive", pid_file, strE(pid))
+                return "active"
         status_file = self.get_status_file_from(conf)
         if self.getsize(status_file):
             state = self.get_status_from(conf, "ActiveState", "")
