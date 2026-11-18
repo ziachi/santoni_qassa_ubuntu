@@ -7,6 +7,12 @@ exec >>/var/log/boot-services.log 2>&1
 echo "[$(date -Is)] boot-services: start"
 /root/suid-mount.sh
 
+# Installer pihak ketiga mengecek [ -d /run/systemd/system ] atau sd_booted()
+# untuk memutuskan apakah host ini systemd. Tanpa direktori itu, banyak
+# installer jatuh ke jalur non-systemd (sysvinit/openrc) dan melewatkan
+# systemctl sepenuhnya.
+mkdir -p /run/systemd/system 2>/dev/null
+
 # systemctl3.py menentukan status ssh.service dari PIDFile. sshd menulis file itu
 # saat daemonize, tapi di awal boot bisa ter-truncate jadi 0 byte (sshd kedua yang
 # gagal bind :22). Tulis ulang dari listener yang benar-benar hidup, sebelum dan
