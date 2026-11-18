@@ -45,6 +45,18 @@ assert_sshd_pid
 # slow or failing cron cannot delay the login path. Both calls are idempotent.
 start_cron() {
     if [ -f /lib/systemd/system/cron.service ] || [ -f /etc/init.d/cron ]; then
+        # /run is a plain directory on /data here, not a tmpfs, so
+        # /run/crond.pid survives a reboot. The shim treats a pidfile whose pid
+        # is alive as "already running", and Android reuses pids fast: after the
+        # second boot the stale pid belonged to an unrelated process, so cron was
+        # never started while is-active still read the same file and said
+        # "active". Drop a pidfile that does not name cron before starting it.
+        if [ -f /run/crond.pid ]; then
+            old=$(cat /run/crond.pid 2>/dev/null)
+            if [ -n "$old" ] && [ "$(cat /proc/$old/comm 2>/dev/null)" != "cron" ]; then
+                rm -f /run/crond.pid
+            fi
+        fi
         /usr/bin/systemctl enable cron >/dev/null 2>&1
         /usr/bin/systemctl start cron >/dev/null 2>&1
     fi

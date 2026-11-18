@@ -89,6 +89,7 @@
 | 83 | - | - | vps-setup: ship cron.service.d/pidfile.conf in the image |
 | 84 | - | - | vps-setup: install cron, it was never in VPS_PACKAGES |
 | 85 | - | - | vps-setup: install iproute2, it was never in VPS_PACKAGES |
+| 86 | - | - | vps-setup: start cron even when a stale pidfile survives reboot |
 
 ## Releases
 
@@ -2083,3 +2084,22 @@ package it did not contain.
 
 **Impact.** `ip a` and `ss -tulnp` now work for `root` and `ubuntu`, and the
 image matches its own `packages.list`.
+
+### #86 — `cron` was skipped after a reboot
+
+**Problem.** `/run` is a plain directory on `/data` in this chroot, not a tmpfs,
+so `/run/crond.pid` survives a reboot. `systemctl3.py` treats a pidfile whose
+pid is alive as "already running", and Android reuses pids quickly: after the
+second boot the stale pid belonged to an unrelated process, so
+`boot-services.sh` logged `the service is already running on PID 1596` and never
+started cron. `systemctl is-active cron` still said `active`, because it read
+the same stale file, so the failure was silent.
+
+**Fix.** In `start_cron()`, drop `/run/crond.pid` when the pid it names is not
+`cron`, before calling `systemctl start cron`.
+
+**Files.** `vps-setup/rootdir/usr/local/sbin/boot-services.sh`, `README.md`,
+`CHANGELOG.md`.
+
+**Impact.** `cron` starts on every boot, and `is-active` no longer reports a
+dead daemon as active.

@@ -741,6 +741,12 @@ missing from `VPS_PACKAGES` even though `packages.list` lists it, so `ip` and
 `ss` were absent while `netstat` from `net-tools` still worked. Both are in the
 list now.
 
+`/run` is a plain directory on `/data`, not a tmpfs, so pidfiles survive a
+reboot. The shim reads a pidfile whose pid is alive as "already running", and
+Android reuses pids quickly, so a stale `/run/crond.pid` could point at an
+unrelated process and make the cron step skip a daemon that was not running.
+`start_cron` now drops a pidfile that does not name `cron` before starting it.
+
 Both drop-ins are shipped in the image by `PRODUCT_COPY_FILES` in
 `qassa_santoni.mk`, alongside the rest of `vps-setup/rootdir`.
 
