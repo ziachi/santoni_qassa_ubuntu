@@ -1,0 +1,133 @@
+#! /usr/bin/env python3
+""" loginctl for a chroot that has no systemd-logind and no D-Bus.
+
+    The stock loginctl is a client for logind and reaches it over the system
+    bus. There is no bus here, so every call died with "Failed to connect to
+    bus: No such file or directory" and installers that probe the user manager
+    (enable-linger, show-user, list-users) gave up before they ever got to
+    systemctl. The answers those callers need are answered here instead.
+
+    Linger is reported as enabled because there is no logind to tear user
+    services down when a session ends: boot-services.sh starts them at boot
+    and nothing reaps them on logout, which is exactly what linger asks for.
+"""
+import os
+import pwd
+import sys
+
+LINGER_DIR = "/var/lib/systemd/linger"
+VERSION = "systemd 249 (249.11-0ubuntu3.23)"
+
+NOOP_COMMANDS = {
+    "activate", "attach", "flush-devices", "hibernate", "hybrid-sleep",
+    "kill-session", "kill-user", "lock-session", "lock-sessions",
+    "power-off", "reboot", "set-wall-message", "suspend",
+    "suspend-then-hibernate", "terminate-session", "terminate-user",
+    "unlock-session", "unlock-sessions",
+}
+
+
+def lookup_user(name=None):
+    if name:
+        return pwd.getpwnam(name)
+    return pwd.getpwuid(os.getuid())
+
+
+def write_linger_marker(user, present):
+    """ best effort: keep the path logind would use, but never fail on it """
+    marker = os.path.join(LINGER_DIR, user.pw_name)
+    try:
+        if present:
+            os.makedirs(LINGER_DIR, exist_ok=True)
+            with open(marker, "w"):
+                pass
+        elif os.path.exists(marker):
+            os.unlink(marker)
+    except OSError:
+        pass
+
+
+def enable_linger(args):
+    write_linger_marker(lookup_user(args[0] if args else None), True)
+    return 0
+
+
+def disable_linger(args):
+    write_linger_marker(lookup_user(args[0] if args else None), False)
+    return 0
+
+
+def user_properties(user):
+    return [
+        ("Name", user.pw_name),
+        ("UID", str(user.pw_uid)),
+        ("GID", str(user.pw_gid)),
+        ("State", "active"),
+        ("Linger", "yes"),
+        ("RuntimePath", "/run/user/%d" % user.pw_uid),
+        ("Service", "user@%d.service" % user.pw_uid),
+        ("Slice", "user-%d.slice" % user.pw_uid),
+    ]
+
+
+def show_user(args):
+    wanted = []
+    names = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg.startswith("--property="):
+            wanted.append(arg.split("=", 1)[1])
+        elif arg in ("-p", "--property"):
+            index += 1
+            if index < len(args):
+                wanted.append(args[index])
+        elif not arg.startswith("-"):
+            names.append(arg)
+        index += 1
+    properties = user_properties(lookup_user(names[0] if names else None))
+    if wanted:
+        properties = [item for item in properties if item[0] in wanted]
+    for key, value in properties:
+        print("%s=%s" % (key, value))
+    return 0
+
+
+def list_users(args):
+    print("%-6s %-16s %s" % ("UID", "USER", "STATE"))
+    for user in pwd.getpwall():
+        if user.pw_uid < 1000 and user.pw_name != "root":
+            continue
+        print("%-6d %-16s %s" % (user.pw_uid, user.pw_name, "active"))
+    return 0
+
+
+def main(argv):
+    args = argv[1:]
+    if not args:
+        return 0
+    if args[0] in ("--version", "-V"):
+        print(VERSION)
+        return 0
+    if args[0] in ("--help", "-h"):
+        print("loginctl [COMMAND] [NAME...]")
+        return 0
+    command, rest = args[0], args[1:]
+    if command == "enable-linger":
+        return enable_linger(rest)
+    if command == "disable-linger":
+        return disable_linger(rest)
+    if command == "show-user":
+        return show_user(rest)
+    if command == "list-users":
+        return list_users(rest)
+    if command in ("list-sessions", "show-session", "session-status", "user-status"):
+        return 0
+    if command in NOOP_COMMANDS:
+        return 0
+    sys.stderr.write("loginctl: unknown command %s\n" % command)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

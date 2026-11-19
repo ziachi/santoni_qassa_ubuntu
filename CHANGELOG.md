@@ -98,6 +98,7 @@
 | 92 | - | - | vps-setup: standardise the CLI environment for every session type |
 | 93 | - | - | vps-setup: rotate the logs and TRIM weekly from cron |
 | 94 | - | - | vps-setup: ship the six overlay files #92 added but never copied |
+| 95 | - | - | vps-setup: quiet the systemctl scan, add loginctl and a user session bus |
 
 ## Releases
 
@@ -2374,3 +2375,73 @@ files to 644/644/644/440/644/644 with the owners above.
 environment actually applies: `$EDITOR`, `$VISUAL` and `$PAGER` reach every
 session type, `sudo -e` and `sudo visudo` keep them, and `sshd` carries the
 `SetEnv` block for sessions that never start a shell.
+
+### #95 — `systemctl` floods stderr, and `loginctl` cannot reach a bus
+
+**Problem.** `hermes gateway install` as `ubuntu` printed a wall of
+`ERROR:systemctl:` lines — `not found /dev/tty0`, `[Install] WantedBy unknown:
+getty.target`, `not found /lib/systemd/system/dbus-broker.service` — and then
+exited 1. Three separate defects sat behind that output.
+
+`daemon-reload` validates every unit file on the image, including the stock
+Ubuntu units that cannot work in a chroot, and logs each finding at ERROR.
+`logg` was set to NOTE (25), so WARNING and ERROR both reached the root handler
+`basicConfig` installs, which prints `LEVEL:name:message` to stderr. Real
+`systemctl` is silent on success.
+
+`loginctl` was still the stock ELF, a logind client that needs the system bus.
+There is no bus here, so `loginctl enable-linger ubuntu` died with `Failed to
+connect to bus: No such file or directory`, and nothing ever created
+`/run/user/<uid>`. Installers probe both before they will touch `systemctl
+--user`, so they gave up before reaching the shim — which needs no D-Bus at all.
+
+`syntax_check_service` compared the raw `ExecStart=` text against `/`, so a
+quoted path (`ExecStart="/path/to/bin" "arg"`, which systemd allows and hermes
+writes) was reported as "Executable path is not absolute".
+
+**Trial-Error.** The first attempt set `logg.propagate = False` for the scan.
+The messages kept appearing, just without the `ERROR:systemctl:` prefix: with no
+handler of its own and propagation off, the record fell through to
+`logging.lastResort`, which prints the bare message to stderr. A `NullHandler`
+on `logg` is what actually stops it.
+
+**Fix.** The stderr handler is pinned to ERROR, so the scan's diagnostics stay in
+`/var/log/systemctl.log` and `-v` still surfaces them. `daemon_reload_target`
+stops propagating for the duration of the scan. `exec_first_word` splits the
+`Exec*=` line with `shlex` before the absolute-path check. A new
+`usr/bin/loginctl` answers `enable-linger`, `disable-linger`, `show-user`,
+`list-users` and the session no-ops from the filesystem, and reports
+`Linger=yes` because there is no logind to tear user services down. A new
+`usr/local/sbin/user-session-bus.sh`, called from `boot-services.sh`, creates
+`/run/user/<uid>` and starts a real `dbus-daemon --session` on
+`/run/user/<uid>/bus`; `00-environment.sh` exports `XDG_RUNTIME_DIR` and
+`DBUS_SESSION_BUS_ADDRESS` for login shells. The `journalctl` shim now consumes
+the value of `-n`, `-u`, `-p`, `--since` and `--until` instead of treating it as
+a unit name.
+
+**Verification.** On the device, as `ubuntu` and as `root`: `systemctl
+daemon-reload` and `systemctl --user daemon-reload` print 0 bytes; `status`,
+`is-active`, `is-enabled`, `is-system-running` and `list-units` are unchanged;
+`systemctl start no-such-unit.service` still prints `Unit ... not found.`;
+`-v daemon-reload` still reports the 92 problems and `/var/log/systemctl.log`
+still records them. A user unit with `ExecStart="/bin/sleep" "300"` starts and
+reports active. `loginctl enable-linger ubuntu` exits 0, `show-user` reports
+`Linger=yes`, and `dbus-send --session ... ListNames` gets a reply from the new
+bus. `hermes gateway install` now exits 0 with "Systemd linger is enabled" and
+"User service started"; `hermes gateway status` reads the unit through the shim.
+The service itself reports `failed` only because a manual `hermes gateway run`
+(PID 4880) already holds hermes' singleton lock — hermes says so in its own
+output.
+
+**Files.** `vps-setup/rootdir/usr/bin/systemctl`,
+`vps-setup/rootdir/usr/bin/loginctl` (new),
+`vps-setup/rootdir/usr/local/sbin/user-session-bus.sh` (new),
+`vps-setup/rootdir/usr/local/sbin/boot-services.sh`,
+`vps-setup/rootdir/usr/local/bin/journalctl`,
+`vps-setup/rootdir/etc/profile.d/00-environment.sh`, `vps-setup/apply.sh`,
+`qassa_santoni.mk`, `docs/VPS-SETUP.md`, `CHANGELOG.md`.
+
+**Impact.** No image change until the next build. After it, any CLI or daemon
+that manages a service — system or `--user` — sees the quiet, D-Bus-free
+behaviour a stock Ubuntu server gives it, instead of a wall of chroot-specific
+diagnostics.

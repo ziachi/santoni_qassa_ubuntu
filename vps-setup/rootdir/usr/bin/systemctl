@@ -33,6 +33,11 @@ __version__: str = "1.7.1311"
 
 import logging
 logg: logging.Logger = logging.getLogger("systemctl")
+# Without a handler of its own, a record that is not propagated falls through
+# to logging.lastResort, which prints the bare message to stderr. Attaching a
+# NullHandler keeps that from happening when a scan deliberately stops
+# propagating.
+logg.addHandler(logging.NullHandler())
 TRACE = (logging.DEBUG + logging.NOTSET) // 2
 HINT = (logging.DEBUG + logging.INFO) // 2
 NOTE = (logging.WARNING + logging.INFO) // 2
@@ -714,6 +719,15 @@ def exec_path(cmd: str) -> Tuple[ExecMode, str]:
     argv0 = "@" in prefix
     mode = ExecMode(prefix, check, nouser, noexpand, argv0)
     return mode, newcmd
+def exec_first_word(cmd: str) -> str:
+    """ the executable token of an Exec*= line, honouring the quoting that
+        systemd allows around it, e.g. ExecStart="/path/to/bin" "arg" """
+    _, newcmd = exec_path(cmd)
+    try:
+        parts = shlex.split(newcmd)
+    except ValueError:
+        parts = newcmd.split()
+    return parts[0] if parts else ""
 class LoadMode(NamedTuple):
     mode: str
     check: bool
@@ -2417,7 +2431,8 @@ class SystemctlUnitFiles:
             logg.error(" %s: Failed to parse service type, ignoring: %s", unit, haveType)
             errors += 100
         for line in haveExecStart:
-            mode, exe = exec_path(line)
+            mode, _ = exec_path(line)
+            exe = exec_first_word(line)
             if not exe.startswith("/"):
                 if mode.check:
                     logg.error("  %s: %s Executable path is not absolute.", unit, section)
@@ -2427,7 +2442,8 @@ class SystemctlUnitFiles:
                 errors += 1
             usedExecStart.append(line)
         for line in haveExecStop:
-            mode, exe = exec_path(line)
+            mode, _ = exec_path(line)
+            exe = exec_first_word(line)
             if not exe.startswith("/"):
                 if mode.check:
                     logg.error("  %s: %s Executable path is not absolute.", unit, section)
@@ -2437,7 +2453,8 @@ class SystemctlUnitFiles:
                 errors += 1
             usedExecStop.append(line)
         for line in haveExecReload:
-            mode, exe = exec_path(line)
+            mode, _ = exec_path(line)
+            exe = exec_first_word(line)
             if not exe.startswith("/"):
                 if mode.check:
                     logg.error("  %s: %s Executable path is not absolute.", unit, section)
@@ -6085,15 +6102,24 @@ class Systemctl:
         if self._now:
             logg.debug("loop_sleep=%s", self.loop_sleep)
         errors = 0
-        for unit in self.unitfiles.match_units():
-            conf = None
-            try:
-                conf = self.unitfiles.get_conf(unit)
-            except OSError as e:
-                filename = conf.filename() if conf else unit
-                logg.error("%s: can not read unit file %s >> %s", unit, strQ(filename), e)
-                continue
-            errors += self.unitfiles.syntax_check(conf)
+        # This scan validates every unit file on the image, including the
+        # stock ones that cannot work in a chroot. Those diagnostics belong
+        # in the log file, not in the caller's stderr, so stop propagating
+        # to the stderr handler for the duration of the scan.
+        saved_propagate = logg.propagate
+        logg.propagate = False
+        try:
+            for unit in self.unitfiles.match_units():
+                conf = None
+                try:
+                    conf = self.unitfiles.get_conf(unit)
+                except OSError as e:
+                    filename = conf.filename() if conf else unit
+                    logg.error("%s: can not read unit file %s >> %s", unit, strQ(filename), e)
+                    continue
+                errors += self.unitfiles.syntax_check(conf)
+        finally:
+            logg.propagate = saved_propagate
         if errors:
             logg.warning(" (%s) found %s problems", errors, errors % 100)
         return True # errors
@@ -7469,6 +7495,13 @@ def main() -> int:
                   help="..keep running as init-process (default if PID 1)")
     opt, args = _o.parse_args()
     logging.basicConfig(level = max(0, logging.FATAL - 10 * opt.verbose))
+    # stderr is for real failures only. The unit-file scan reports its
+    # diagnostics at ERROR, and a stock Ubuntu image always has units that
+    # cannot work in a chroot (no /dev/tty0, no dbus-broker, no initrd), so
+    # the default threshold has to sit above them. The log file still gets
+    # everything because it is attached to `logg` itself.
+    for _stderr_handler in logging.getLogger().handlers:
+        _stderr_handler.setLevel(max(0, logging.ERROR - 10 * opt.verbose))
     logg.setLevel(max(0, NOTE - 5 * opt.verbose))
     #
     _extra_vars = opt.extra_vars

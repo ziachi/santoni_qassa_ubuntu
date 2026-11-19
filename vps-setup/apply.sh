@@ -26,7 +26,14 @@
 #                                     invoke-rc.d's runlevel parsing.
 #   systemctl replacement             docker-systemctl-replacement, patched so
 #                                     get_boottime_from_old_proc skips the
-#                                     non-numeric entries in /proc.
+#                                     non-numeric entries in /proc, so the
+#                                     unit-file scan keeps its diagnostics out
+#                                     of the caller's stderr, and so a quoted
+#                                     ExecStart= path counts as absolute.
+#   loginctl replacement              the stock loginctl is a logind client and
+#                                     there is no D-Bus here, so enable-linger
+#                                     and show-user failed and installers that
+#                                     probe the user manager gave up.
 #   pidfile drop-in                   lets `systemctl status ssh` report the sshd
 #                                     that init.ubuntu.sh started, not "inactive".
 
@@ -124,6 +131,14 @@ elif [ -e /usr/sbin/sshd.real ]; then
 else
     echo "  sshd is not an ELF, sshd.real skipped"
 fi
+if [ ! -e /usr/bin/loginctl.orig ] && is_elf /usr/bin/loginctl; then
+    cp -a /usr/bin/loginctl /usr/bin/loginctl.orig
+    echo "  loginctl.orig created"
+elif [ -e /usr/bin/loginctl.orig ]; then
+    echo "  loginctl.orig already present"
+else
+    echo "  loginctl is not an ELF, loginctl.orig skipped"
+fi
 
 # ------------------------------------------------------------------- 4. overlay
 say "4. copy the overlay"
@@ -131,7 +146,7 @@ while IFS= read -r rel; do
     case "$rel" in
         home/ubuntu/*)          mode=644; owner=ubuntu:ubuntu ;;
         etc/sudoers.d/*)        mode=440; owner=root:root ;;
-        usr/bin/systemctl|usr/sbin/sshd|usr/sbin/policy-rc.d|usr/sbin/runlevel|usr/local/bin/journalctl|usr/local/sbin/*.sh)
+        usr/bin/systemctl|usr/bin/loginctl|usr/sbin/sshd|usr/sbin/policy-rc.d|usr/sbin/runlevel|usr/local/bin/journalctl|usr/local/sbin/*.sh)
                                 mode=755; owner=root:root ;;
         # run-parts skips anything in cron.daily/cron.weekly that is not
         # executable, so these two must not fall through to the 644 default.

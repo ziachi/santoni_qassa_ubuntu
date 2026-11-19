@@ -254,6 +254,42 @@ sudo grep -i logrotate /var/log/syslog | tail
 means a path is listed twice, usually because a local file repeats `wtmp` or
 `btmp`.
 
+## Service management
+
+`systemctl` is `docker-systemctl-replacement`, not systemd, and `loginctl` is a
+small shim. Both are quiet on success and only speak up when something is
+actually wrong, so a CLI or daemon that manages a service behaves the way it
+would on a stock Ubuntu server.
+
+```bash
+# system units
+sudo systemctl status ssh
+sudo systemctl restart cron
+
+# user units, no D-Bus session required
+systemctl --user daemon-reload
+systemctl --user enable --now myapp.service
+systemctl --user status myapp.service
+
+# linger and the per-user runtime directory
+loginctl enable-linger ubuntu
+loginctl show-user ubuntu --property=Linger
+ls -l /run/user/1000/bus
+```
+
+`daemon-reload` validates every unit file on the image, including the stock
+Ubuntu units that cannot work in a chroot (no `/dev/tty0`, no `dbus-broker`, no
+initrd). Those findings go to `/var/log/systemctl.log`, not to the caller's
+stderr. `systemctl -v daemon-reload` prints them, and the log file keeps them
+either way.
+
+`loginctl` answers from the filesystem because there is no logind and no system
+bus. `Linger` always reads `yes`: nothing here tears user services down when a
+session ends, which is what linger asks for. `user-session-bus.sh` runs from
+`boot-services.sh` and starts a real `dbus-daemon --session` on
+`/run/user/<uid>/bus`, so tools that probe for a session bus before they will
+touch `systemctl --user` find one.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -280,3 +316,6 @@ means a path is listed twice, usually because a local file repeats `wtmp` or
 | `system_server` crash-loops after boot | SurfaceFlinger is disabled | see [ARCHITECTURE.md](ARCHITECTURE.md#headless-services-why-surfaceflinger-stays-enabled): drop the `surfaceflinger` override |
 | `crontab -e`, `git commit` without `-m`, `sensible-editor`, `sudoedit`, `sudo -e` or any program that opens `$EDITOR` starts `vi` instead of `nano`, and the modal editor looks frozen | `$EDITOR` and `$VISUAL` are empty in the SSH session: sshd runs outside the chroot, so `pam_env` never applies `/etc/environment` and the `EDITOR=nano` line there never reaches the process. Programs fall back to `vi` (`/usr/bin/vim.tiny`) | fixed in #91 and #92; `SetEnv`, `/etc/profile.d/00-environment.sh`, `/etc/bash.bashrc` and `/etc/sudoers.d/10-editor` now cover every session type. In `vi`, press `i` to type and `Esc` then `:q!` to leave |
 | `zeroclaw quickstart` exits with `could not determine the terminal size` | the pty reports 0 rows and 0 columns, which is what a client that sends no window size, or a `script` wrapper, produces | run it from a real terminal, or set the size first with `stty rows 40 cols 100`; for a headless setup use `zeroclaw config set <path> <value>` instead of the TUI |
+| `systemctl` prints a wall of `ERROR:systemctl: not found /dev/tty0`, `[Install] WantedBy unknown: getty.target`, `not found /lib/systemd/system/dbus-broker.service` | the shim's unit-file scan logs chroot-specific findings at ERROR, and they reached stderr | fixed in #95; the scan writes to `/var/log/systemctl.log` and stderr stays empty. `systemctl -v daemon-reload` still prints them |
+| `loginctl enable-linger` says `Failed to connect to bus: No such file or directory` | the stock `loginctl` is a logind client and there is no system bus in the chroot | fixed in #95; `loginctl` is a shim now. On an older build, create `/run/user/1000` and start `dbus-daemon --session --address=unix:path=/run/user/1000/bus` by hand |
+| `hermes gateway install` says `User systemd not reachable` or `the user D-Bus socket did not appear` | there is no `/run/user/<uid>/bus`, so the installer refuses to use `systemctl --user` even though the shim needs no D-Bus | fixed in #95; on a running device run `sudo /usr/local/sbin/user-session-bus.sh`, then re-run the installer |

@@ -1,27 +1,53 @@
 #!/bin/sh
 # journalctl minimal: docker-systemctl-replacement menulis
 # /var/log/journal/<unit>.service.log
-unit=""; follow=0
-for a in "$@"; do
-  case "$a" in
+#
+# Only the flags that installers and operators actually use are understood.
+# A flag that takes a value consumes it, so the value is never mistaken for a
+# unit name: `journalctl -u ssh -n 25` used to look for a unit called "25".
+unit=""
+follow=0
+lines=200
+
+while [ $# -gt 0 ]; do
+  case "$1" in
     -f|--follow) follow=1 ;;
+    -u|--unit) shift; unit="$1" ;;
+    --unit=*) unit="${1#--unit=}" ;;
+    -n|--lines) shift; lines="$1" ;;
+    --lines=*) lines="${1#--lines=}" ;;
+    -n*) lines="${1#-n}" ;;
+    -p|--priority|--since|--until|-o|--output|-S|--identifier) shift ;;
     -*) ;;
-    *) unit="$a" ;;
+    *) [ -z "$unit" ] && unit="$1" ;;
   esac
+  shift
 done
+
+case "$lines" in
+  ''|*[!0-9]*) lines=200 ;;
+esac
+
 unit="${unit%.service}"
+
+show() {
+  if [ "$follow" = 1 ]; then
+    exec tail -f -n "$lines" "$@"
+  fi
+  exec tail -n "$lines" "$@"
+}
+
 if [ -n "$unit" ]; then
   for f in "/var/log/journal/$unit.service.log" "/var/log/journal/$unit.log"; do
     [ -f "$f" ] || continue
-    if [ "$follow" = 1 ]; then exec tail -f -n 200 "$f"; fi
-    exec tail -n 200 "$f"
+    show "$f"
   done
   echo "journalctl: tidak ada log untuk $unit" >&2
   exit 1
 fi
 if [ -d /var/log/journal ]; then
-  if [ "$follow" = 1 ]; then exec tail -f -n 200 /var/log/journal/*.log; fi
-  exec tail -n 200 /var/log/journal/*.log
+  set -- /var/log/journal/*.log
+  [ -f "$1" ] && show "$@"
 fi
 echo "journalctl: belum ada log" >&2
 exit 1

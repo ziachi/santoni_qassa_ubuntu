@@ -18,6 +18,11 @@ echo "[$(date -Is)] boot-services: start"
 mkdir -p /run/systemd/system 2>/dev/null
 chmod 755 /run/systemd/system 2>/dev/null
 
+# Nothing here runs logind, so /run/user/<uid> and the per-user session bus
+# never appear. Installers that manage user services check for
+# /run/user/<uid>/bus before they will use `systemctl --user` at all.
+/usr/local/sbin/user-session-bus.sh
+
 # systemctl3.py derives ssh.service status from PIDFile. sshd writes that file
 # when it daemonizes, but early in boot it can be truncated to 0 bytes (a second
 # sshd that failed to bind :22). Rewrite it from the listener that is actually

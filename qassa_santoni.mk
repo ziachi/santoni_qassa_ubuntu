@@ -148,6 +148,7 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/usr/sbin/runlevel:system/etc/vps-setup/rootdir/usr/sbin/runlevel \
     device/xiaomi/santoni/vps-setup/rootdir/usr/sbin/sshd:system/etc/vps-setup/rootdir/usr/sbin/sshd \
     device/xiaomi/santoni/vps-setup/rootdir/usr/bin/systemctl:system/etc/vps-setup/rootdir/usr/bin/systemctl \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/bin/loginctl:system/etc/vps-setup/rootdir/usr/bin/loginctl \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/bin/journalctl:system/etc/vps-setup/rootdir/usr/local/bin/journalctl \
     device/xiaomi/santoni/vps-setup/rootdir/etc/environment:system/etc/vps-setup/rootdir/etc/environment \
     device/xiaomi/santoni/vps-setup/rootdir/etc/default/locale:system/etc/vps-setup/rootdir/etc/default/locale \
@@ -162,6 +163,7 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/root/.profile:system/etc/vps-setup/rootdir/root/.profile \
     device/xiaomi/santoni/vps-setup/rootdir/root/.selected_editor:system/etc/vps-setup/rootdir/root/.selected_editor \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/boot-services.sh:system/etc/vps-setup/rootdir/usr/local/sbin/boot-services.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/user-session-bus.sh:system/etc/vps-setup/rootdir/usr/local/sbin/user-session-bus.sh \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/suid-mount.sh:system/etc/vps-setup/rootdir/usr/local/sbin/suid-mount.sh \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.bashrc:system/etc/vps-setup/rootdir/home/ubuntu/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile \

@@ -11,3 +11,16 @@ if [ -r /etc/environment ] && sh -n /etc/environment 2>/dev/null; then
     . /etc/environment
     set +a
 fi
+
+# There is no logind, so nothing exports the per-user runtime directory or the
+# session bus address that a stock Ubuntu login session gets. user-session-bus.sh
+# creates both at boot; point the shell at them so `systemctl --user` and D-Bus
+# clients find the same paths they would on a normal server.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then
+    XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    export XDG_RUNTIME_DIR
+fi
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "/run/user/$(id -u)/bus" ]; then
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+    export DBUS_SESSION_BUS_ADDRESS
+fi
