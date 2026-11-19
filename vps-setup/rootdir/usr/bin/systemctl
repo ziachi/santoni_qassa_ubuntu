@@ -4588,6 +4588,12 @@ class Systemctl:
             logg.error("(%s): bad workingdir: '%s'", shell_cmd(cmd), badpath)
             sys.exit(1)
         env = self.extend_exec_env(env)
+        # Real systemd exports a per-invocation id to every process it spawns,
+        # and programs use its presence to tell "a service manager started me"
+        # from "someone ran me by hand". hermes' gateway refuses to start
+        # without it: it would mistake its own unit for a second gateway.
+        if not env.get("INVOCATION_ID"):
+            env["INVOCATION_ID"] = os.urandom(16).hex()
         env.update(envs) # set $HOME to ~$USER
         try:
             if EXEC_SPAWN:

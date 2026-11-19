@@ -2445,3 +2445,70 @@ output.
 that manages a service — system or `--user` — sees the quiet, D-Bus-free
 behaviour a stock Ubuntu server gives it, instead of a wall of chroot-specific
 diagnostics.
+
+### #96 — `is-active` called a dead service active, and `reset-failed` exited 1
+
+**Problem.** Once a service's process died, `systemctl is-active` and `status`
+kept reporting `active`: the shim trusted the `ActiveState` it had written at
+start and never re-checked the recorded `MainPID`. `hermes gateway status`
+therefore said the gateway was running while nothing was listening.
+`systemctl reset-failed` on a unit with no failure record exited 1, which made
+`hermes gateway uninstall` look like it had failed.
+
+**Fix.** `is_active_from` and the status printer treat a unit as active only
+while its `MainPID` is still alive; a dead PID is reported as `failed` and the
+stale status file is cleaned. `reset-failed` returns 0 when there is nothing to
+clear, matching systemd.
+
+**Verification.** On the device, `systemctl --user is-active hermes-gateway`
+reports `failed` (exit 3) once the gateway process is gone and `active` (exit 0)
+while it runs. `systemctl reset-failed` on a clean unit exits 0.
+
+**Files.** `vps-setup/rootdir/usr/bin/systemctl`.
+
+**Impact.** Status output matches reality, so installers and health checks stop
+trusting a stale `active`.
+
+### #97 — `ExecStopPost` could not see a systemd parent, and `journalctl` read the wrong user log path
+
+**Problem.** hermes' `cgroup_cleanup` runs as `ExecStopPost` and refuses to reap
+the service's cgroup unless `/proc/<ppid>/comm` is `systemd`. Real systemd's PID 1
+carries that name; here the parent is the shim, so the cleanup bailed out and the
+gateway's singleton lock survived a stop. Separately, the `journalctl` shim looked
+for user unit logs in `~/.config/log/`, but the shim writes them to
+`~/.config/log/journal/`, so `journalctl --user -u <unit>` found nothing.
+
+**Fix.** Lifecycle commands (`start`, `stop`, `restart`, `reload` and the
+`*-restart` variants) rename the shim to `systemd` in `/proc/self/comm` before
+dispatching, so a unit's `ExecStopPost` sees the parent name it would see under
+real systemd. The `journalctl` shim reads `~/.config/log/journal/<unit>.log`.
+
+**Verification.** On the device, `hermes gateway stop` releases the lock and the
+next `hermes gateway install` starts the service. `journalctl -u hermes-gateway
+-n 10` prints the gateway's own log lines.
+
+**Files.** `vps-setup/rootdir/usr/bin/systemctl`,
+`vps-setup/rootdir/usr/local/bin/journalctl`.
+
+**Impact.** A stopped service is fully stopped, and user unit logs are readable.
+
+### #98 — the gateway refused to start because `INVOCATION_ID` was missing
+
+**Problem.** `hermes gateway install` left the service `failed`. The gateway
+decides whether a service manager started it by looking for systemd's
+`INVOCATION_ID`; without it, it ran the "a gateway is already running under
+systemd" guard, saw its own unit, and exited 1. The shim never exported
+`INVOCATION_ID`.
+
+**Fix.** `execve_from` sets `INVOCATION_ID` to a random 32-hex value for every
+process it spawns, the way systemd does for each unit invocation.
+
+**Verification.** On the device, `hermes gateway stop` → `uninstall` → `install`
+all exit 0 with empty stderr; `hermes gateway status` reports `Active: active
+(running)`, `systemctl --user is-active hermes-gateway` prints `active`, and the
+gateway process stays up.
+
+**Files.** `vps-setup/rootdir/usr/bin/systemctl`.
+
+**Impact.** Supervised daemons that check for a service manager now start
+normally.
