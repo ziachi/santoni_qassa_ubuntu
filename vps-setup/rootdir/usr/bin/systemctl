@@ -7624,6 +7624,19 @@ def main() -> int:
         modules.remove("service")
     except ValueError:
         pass
+    # Programs that ask "am I supervised by systemd?" read the parent's comm
+    # (/proc/<ppid>/comm == "systemd"). Real systemd's PID 1 carries that name,
+    # so a unit's ExecStopPost sees it; here the parent is this shim. Present
+    # the same name for lifecycle commands so those checks pass instead of
+    # refusing to run (hermes' cgroup_cleanup does exactly this).
+    if command in ("start", "stop", "restart", "reload", "try-restart",
+                   "force-reload", "condrestart", "reload-or-restart",
+                   "reload-or-try-restart"):
+        try:
+            with open("/proc/self/comm", "w") as comm:
+                comm.write("systemd")
+        except OSError:
+            pass
     return runcommand(command, *modules)
 
 if __name__ == "__main__":

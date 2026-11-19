@@ -42,7 +42,7 @@ if [ -n "$unit" ]; then
   # systemctl shim uses get_LOG_DIR(root=False) for --user). A system
   # `journalctl -u` shows user unit logs too, so both are searched.
   for f in "/var/log/journal/$unit.service.log" "/var/log/journal/$unit.log" \
-           "$HOME/.config/log/$unit.service.log" "$HOME/.config/log/$unit.log"; do
+           "$HOME/.config/log/journal/$unit.service.log" "$HOME/.config/log/journal/$unit.log"; do
     [ -f "$f" ] || continue
     show "$f"
   done
@@ -53,8 +53,8 @@ if [ -d /var/log/journal ]; then
   set -- /var/log/journal/*.log
   [ -f "$1" ] && show "$@"
 fi
-if [ -d "$HOME/.config/log" ]; then
-  set -- "$HOME/.config/log"/*.log
+if [ -d "$HOME/.config/log/journal" ]; then
+  set -- "$HOME/.config/log/journal"/*.log
   [ -f "$1" ] && show "$@"
 fi
 echo "-- No entries --"
