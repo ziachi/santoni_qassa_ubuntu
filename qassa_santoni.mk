@@ -151,15 +151,21 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/bin/journalctl:system/etc/vps-setup/rootdir/usr/local/bin/journalctl \
     device/xiaomi/santoni/vps-setup/rootdir/etc/environment:system/etc/vps-setup/rootdir/etc/environment \
     device/xiaomi/santoni/vps-setup/rootdir/etc/default/locale:system/etc/vps-setup/rootdir/etc/default/locale \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/bash.bashrc:system/etc/vps-setup/rootdir/etc/bash.bashrc \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/profile.d/00-environment.sh:system/etc/vps-setup/rootdir/etc/profile.d/00-environment.sh \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/ssh/sshd_config:system/etc/vps-setup/rootdir/etc/ssh/sshd_config \
     device/xiaomi/santoni/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf:system/etc/vps-setup/rootdir/etc/systemd/system/ssh.service.d/pidfile.conf \
     device/xiaomi/santoni/vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf:system/etc/vps-setup/rootdir/etc/systemd/system/cron.service.d/pidfile.conf \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/sudoers.d/10-editor:system/etc/vps-setup/rootdir/etc/sudoers.d/10-editor \
     device/xiaomi/santoni/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd:system/etc/vps-setup/rootdir/etc/sudoers.d/90-ubuntu-nopasswd \
     device/xiaomi/santoni/vps-setup/rootdir/root/.bashrc:system/etc/vps-setup/rootdir/root/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/root/.profile:system/etc/vps-setup/rootdir/root/.profile \
+    device/xiaomi/santoni/vps-setup/rootdir/root/.selected_editor:system/etc/vps-setup/rootdir/root/.selected_editor \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/boot-services.sh:system/etc/vps-setup/rootdir/usr/local/sbin/boot-services.sh \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/suid-mount.sh:system/etc/vps-setup/rootdir/usr/local/sbin/suid-mount.sh \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.bashrc:system/etc/vps-setup/rootdir/home/ubuntu/.bashrc \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile \
+    device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.selected_editor:system/etc/vps-setup/rootdir/home/ubuntu/.selected_editor \
     device/xiaomi/santoni/vps-setup/rootdir/etc/logrotate.d/vps:system/etc/vps-setup/rootdir/etc/logrotate.d/vps \
     device/xiaomi/santoni/vps-setup/rootdir/etc/cron.daily/logrotate:system/etc/vps-setup/rootdir/etc/cron.daily/logrotate \
     device/xiaomi/santoni/vps-setup/rootdir/etc/cron.weekly/fstrim:system/etc/vps-setup/rootdir/etc/cron.weekly/fstrim

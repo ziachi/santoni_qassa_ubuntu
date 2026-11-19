@@ -97,6 +97,7 @@
 | 91 | - | - | docs: correct the TUI freeze entry, empty $EDITOR falls back to vi |
 | 92 | - | - | vps-setup: standardise the CLI environment for every session type |
 | 93 | - | - | vps-setup: rotate the logs and TRIM weekly from cron |
+| 94 | - | - | vps-setup: ship the six overlay files #92 added but never copied |
 
 ## Releases
 
@@ -2337,3 +2338,39 @@ truncated to 0 bytes; `/etc/cron.weekly/fstrim` trimmed 197.4 MiB and exited 0.
 **Impact.** No image change until the next build; the overlay applies on the
 next `vps-setup` run. Logs are capped at four compressed weeks and the flash is
 trimmed weekly. `wtmp` and `btmp` keep rotating through the package's own files.
+
+### #94 — the six overlay files from #92 never reached the image
+
+**Problem.** Commit #92 added `etc/bash.bashrc`, `etc/profile.d/00-environment.sh`,
+`etc/ssh/sshd_config`, `etc/sudoers.d/10-editor`, `home/ubuntu/.selected_editor`
+and `root/.selected_editor` to `vps-setup/rootdir/`, but none of them were added
+to `PRODUCT_COPY_FILES`. The build only ships what that list names, so the six
+files never landed in `/system/etc/vps-setup/rootdir`. `vps-setup.sh` copies
+`/system/etc/vps-setup/.` into the chroot and `apply.sh` walks that directory, so
+the files were simply absent: `$EDITOR` stayed empty over SSH, `sudo -e` and
+`sudo visudo` had no `env_keep`, and `sshd` never got the `SetEnv` block. The
+whole of #92 was inert on a built image.
+
+**Trial-Error.** Nothing failed loudly, which is why it went unnoticed. The
+overlay is a directory walk, not a manifest, so a file missing from the image is
+indistinguishable from a file that was never written. The check that catches it
+is a set difference between `find vps-setup/rootdir -type f` and the sources
+named in `PRODUCT_COPY_FILES`; it now reports nothing.
+
+**Fix.** Six entries added to `PRODUCT_COPY_FILES`, each mirroring its source
+path under `system/etc/vps-setup/rootdir/`. No `apply.sh` change was needed: the
+existing mode table already resolves them correctly — `etc/sudoers.d/*` to 440
+`root:root`, `home/ubuntu/*` to 644 `ubuntu:ubuntu`, everything else to 644
+`root:root`.
+
+**Verification.** All 27 `PRODUCT_COPY_FILES` sources exist; the set difference
+against `vps-setup/rootdir` is empty; every destination equals
+`system/etc/vps-setup/` plus its source path; the mode table resolves the six
+files to 644/644/644/440/644/644 with the owners above.
+
+**Files.** `qassa_santoni.mk`, `CHANGELOG.md`.
+
+**Impact.** No image change until the next build. After it, #92's CLI
+environment actually applies: `$EDITOR`, `$VISUAL` and `$PAGER` reach every
+session type, `sudo -e` and `sudo visudo` keep them, and `sshd` carries the
+`SetEnv` block for sessions that never start a shell.
