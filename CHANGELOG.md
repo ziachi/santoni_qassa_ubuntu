@@ -99,6 +99,7 @@
 | 93 | - | - | vps-setup: rotate the logs and TRIM weekly from cron |
 | 94 | - | - | vps-setup: ship the six overlay files #92 added but never copied |
 | 95 | - | - | vps-setup: quiet the systemctl scan, add loginctl and a user session bus |
+| 96 | - | - | vps-setup: keep a status file written before the NTP clock correction |
 
 ## Releases
 
