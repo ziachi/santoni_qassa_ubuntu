@@ -213,6 +213,22 @@ adb shell cat /data/ubuntu-boot.log
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
 
+### Boot readiness
+
+Those two lines are the readiness signal, together with an IPv4 address on
+`wlan0`:
+
+```bash
+adb shell tail -3 /data/ubuntu-boot.log
+adb shell ip -4 addr show wlan0 | grep inet
+```
+
+`sys.boot_completed` is not usable here. The framework sets it once
+`system_server` finishes booting, and this image stops Zygote and
+`system_server` on purpose, so the property never arrives. Anything that waits
+on it — a `wait-for-boot` loop, an init trigger, a monitoring script — waits
+forever. Wait for port 22 and the `wlan0` address instead.
+
 ## Log rotation and weekly TRIM
 
 `/var/log` lives on the same 16 GB data partition as the chroot, so an
@@ -311,6 +327,21 @@ now. Each status file is stamped with the boot id it was written in, and a
 record from an earlier boot is ignored, so `is-active` reports `inactive` and
 the next `start` really starts the unit.
 
+The boot id, not the file's mtime, decides staleness. The device boots with the
+clock at 1970 and NTP corrects it a few seconds later, so a status file written
+before the correction always looks older than the computed boot time. Judging
+by mtime alone truncated the record of a unit `boot-services.sh` had just
+started: the process kept running while `is-active`, `status` and
+`hermes gateway status` all reported `inactive (dead)`, and the next `start`
+would have launched a second copy. Comparing the recorded `BootID=` with the
+running boot fixes that; the live-PID check is only a fallback for files that
+carry no `BootID`.
+
+Every process the shim spawns also gets a fresh `INVOCATION_ID`. Supervisors
+that read it to tell one run of a unit from the next then see a new invocation
+per start: the hermes gateway refuses to start without it, and reports "a
+gateway is already running" when the value is inherited from the caller.
+
 ### cgroups: `sudo` and Android's `libprocessgroup`
 
 Android's `libprocessgroup` owns the cgroup tree and reaps a process group when
@@ -335,7 +366,7 @@ looks like a service that starts and then dies. Start services through
 | `apt` says `Temporary failure resolving 'ports.ubuntu.com'` | the chroot is unmarked, so it uses the main routing table, which on Android holds only the local subnet plus an `unreachable default` | fixed in #53; `vps-setup` and `init.ubuntu.sh` copy the `wlan0` gateway into the main table. To repair a running device: `ip route add default via <gateway> dev wlan0` |
 | `chpasswd` exits 0 but the password is still rejected | PAM inside the chroot cannot complete the change, so nothing is written to `/etc/shadow` | write the hash directly, which skips PAM: `adb shell "chroot /data/ubuntu /usr/sbin/usermod -p '<sha512-crypt-hash>' root"`. Keep the single quotes and do not wrap this in `bash -c`: the hash contains `$`, and a second parse expands `$6`, `$salt` and the leading part of the digest, storing a truncated string that no password can match. Generate the hash with `openssl passwd -6 -salt santoni <password>` |
 | SSH still rejects a correct password after the hash is in `/etc/shadow` | PAM inside the chroot cannot complete authentication, usually because `/dev` or `/proc` is not mounted, so `pam_unix` and `pam_loginuid` fail | set `UsePAM no` in `/etc/ssh/sshd_config` and restart sshd; it then compares the password itself with `crypt()` and loads no PAM modules. Confirm the account is not locked with `chroot /data/ubuntu /usr/bin/passwd -S root`, which prints `P` for a usable password |
-| SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin | /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
+| SSH says `Permission denied (publickey,password)` | `PermitRootLogin` is still `prohibit-password`, or `chpasswd` never applied the hash | over USB: `adb shell "chroot /data/ubuntu /bin/bash -c 'echo root:santoniadmin \| /usr/sbin/chpasswd'"`, then confirm `grep ^root: /etc/shadow` shows a hash and not `!` |
 | SSH says `Connection refused` after a reboot | sshd never started. On builds before `c82969e` the boot script used `service ssh start`, and `start-stop-daemon` skips the start when `/run/sshd.pid` still names a live PID; `--oknodo` then hides the failure and the log still says `sshd started` | rebuild with `c82969e` or later. On a running device: `adb shell "rm -f /data/ubuntu/run/sshd.pid; chroot /data/ubuntu /usr/sbin/sshd"` |
 | `adb shell` drops to `/system/bin/sh` | Ubuntu is not installed | run `vps-setup` |
 | `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
@@ -349,3 +380,5 @@ looks like a service that starts and then dies. Start services through
 | `systemctl` prints a wall of `ERROR:systemctl: not found /dev/tty0`, `[Install] WantedBy unknown: getty.target`, `not found /lib/systemd/system/dbus-broker.service` | the shim's unit-file scan logs chroot-specific findings at ERROR, and they reached stderr | fixed in #95; the scan writes to `/var/log/systemctl.log` and stderr stays empty. `systemctl -v daemon-reload` still prints them |
 | `loginctl enable-linger` says `Failed to connect to bus: No such file or directory` | the stock `loginctl` is a logind client and there is no system bus in the chroot | fixed in #95; `loginctl` is a shim now. On an older build, create `/run/user/1000` and start `dbus-daemon --session --address=unix:path=/run/user/1000/bus` by hand |
 | `hermes gateway install` says `User systemd not reachable` or `the user D-Bus socket did not appear` | there is no `/run/user/<uid>/bus`, so the installer refuses to use `systemctl --user` even though the shim needs no D-Bus | fixed in #95; on a running device run `sudo /usr/local/sbin/user-session-bus.sh`, then re-run the installer |
+| A unit started at boot reports `inactive (dead)` while its process is clearly running | the status file was written before NTP corrected the clock from 1970, and the shim judged it stale by mtime alone | fixed in v1.3.2; the shim compares the recorded `BootID=` with the running boot. On an older build, `systemctl --user restart <unit>` once the clock is correct |
+| `hermes gateway start` refuses with "a gateway is already running", or a supervisor complains that `INVOCATION_ID` is missing | the shim did not set `INVOCATION_ID`, so the child inherited the caller's value or none at all | fixed in v1.3.2; every spawned process gets a fresh 32-hex `INVOCATION_ID` |

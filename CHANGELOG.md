@@ -99,13 +99,17 @@
 | 93 | - | - | vps-setup: rotate the logs and TRIM weekly from cron |
 | 94 | - | - | vps-setup: ship the six overlay files #92 added but never copied |
 | 95 | - | - | vps-setup: quiet the systemctl scan, add loginctl and a user session bus |
-| 96 | - | - | vps-setup: keep a status file written before the NTP clock correction |
+| 96 | - | - | vps-setup: present as systemd to supervised children, read user journal logs |
+| 97 | - | - | vps-setup: export INVOCATION_ID to every spawned unit process |
+| 98 | - | - | vps-setup: start enabled user services at boot, ignore status from an earlier boot |
+| 99 | - | - | vps-setup: keep a status file written before the NTP clock correction |
 
 ## Releases
 
 | Version | Date | Build | Size (B) | SHA-256 | Notes |
 |---------|------|-------|----------|---------|-------|
-| v1.3.1 | 2026-11-20 | qassa_ubuntu22-ziachi-santoni.zip | 547148409 | `e9d7e60b8871e2a65bba4a673b4bef92b49dbd2942e6ef7bae97f99b8b2a9795` | v1.3.1 (`7bf47c6`): enabled user services start at boot; 3/3 reboot rounds passed |
+| v1.3.2 | 2026-11-20 | qassa_ubuntu22-ziachi-santoni.zip | 547141580 | `23ac263b5de3f168fd4841f3d0af096f5d99c51e3191e02446255d11fe0538df` | v1.3.2 (`cdc3d31`): enabled user services start at boot, status survives the NTP clock jump; 3/3 reboot rounds passed |
+| v1.3 | 2026-11-19 | qassa_ubuntu22-ziachi-santoni.zip | 547136405 | `85c6d0cccf25266038c012ee93a11b48c5ef8ca8e726cfc81809274f3923aca3` | v1.3 (`c29b07a`): `loginctl` and a user session bus, quiet `systemctl` scan, `INVOCATION_ID` for every unit process |
 | v1.2 | 2026-11-18 | qassa_ubuntu22-ziachi-santoni.zip | 547173448 | `24509786f13528d7ac1d51ea9ca7a90c04bcdfc16f356c785ed40247602a59f0` | v1.2 (`fdf4598`): cron, iproute2, systemctl and reboot fixed; 88/88 checks passed |
 | v1.1 | 2026-11-16 | qassa_ubuntu22-ziachi-santoni.zip | 545707833 | `199a1eafc5eec73948a8bd4d04c1839496e89e213a11e20e7f52a4eb1219cccc` | v32 (`86f58bd`) — devpts and the stale wpa_supplicant socket fixed; flashed and verified on the device |
 | v1 | 2026-11-16 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20261116-0554-Vanilla-signed.zip | 640482400 | `bead5e737f20426f21f98a31c14d533d7a3cbf6f1b06d84819176de5c4f1dfe9` | v22 (`b2da746`) — first headless build published |

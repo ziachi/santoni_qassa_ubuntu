@@ -22,7 +22,7 @@ display server, and a missing launcher is not a bug.
 | **Base** | keepQASSA Sisu v2.4_0.s (Android 10 / Q) |
 | **Kernel** | Luuvy `C.4.0.eol202601`, prebuilt, Linux 4.9.257 arm64 |
 | **SELinux** | Permissive (required by the chroot) |
-| **Current release** | [`v1.2`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.2) |
+| **Current release** | [`v1.3.2`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.3.2) |
 | **Lunch target** | `qassa_santoni-userdebug` |
 | **Build command** | `mka installclean && mka qassa` |
 | **Signed with** | `vendor/ziachi-keys/releasekey` |
@@ -109,6 +109,11 @@ rejoins Wi-Fi and starts Ubuntu on every boot, so everything after that works
 over the network. `vps-setup` sets a random root password and prints it; it is
 also stored in `/data/ubuntu_root_pass` (mode 600) if you miss it.
 
+**Is it ready?** After a reboot, wait for `sshd listening on :22` in
+`/data/ubuntu-boot.log` and an IPv4 address on `wlan0`. `sys.boot_completed` is
+not a readiness signal on this image: Zygote and `system_server` are stopped on
+purpose, so the framework never finishes booting and the property stays unset.
+
 The eight steps `vps-setup` performs, the `wifi` CLI and the troubleshooting
 table are in [docs/VPS-SETUP.md](docs/VPS-SETUP.md).
 
@@ -163,10 +168,10 @@ source-available terms; see [`vps-setup/LICENSE`](vps-setup/LICENSE).
 | `wifi` | `wifi/wifi.sh` | `wpa_cli` + busybox `udhcpc` front-end, replacing `cmd wifi` / `svc wifi` |
 | `vps-setup` | `vps-setup/vps-setup.sh` | one-command Wi-Fi join and Ubuntu install |
 | `ubuntu-enter` | `ubuntu-enter/` | adb shell wrapper with the Wi-Fi password gate |
-| `boot-services` | `vps-setup/rootdir/` | chroot-side boot steps: setuid mounts, cron, CPU governor |
+| `boot-services` | `vps-setup/rootdir/` | chroot-side boot steps: setuid mounts, cron, CPU governor, enabled user services |
 | `logrotate` + `fstrim` | `vps-setup/rootdir/` | daily log rotation and a weekly TRIM, both scheduled by `cron` |
 | `suid-mount` | `vps-setup/rootdir/` | re-applies the setuid mounts the chroot needs |
-| `systemctl` shim | `vps-setup/rootdir/` | enough of systemd for installers and `is-active` |
+| `systemctl` shim | `vps-setup/rootdir/` | enough of systemd for installers, `is-active` and user units at boot |
 | `init.ubuntu.sh` / `.rc` | `rootdir/` | boot script and init service |
 | `webcam_bridge` | `webcam-bridge/` | Camera2 NDK to MJPEG (incomplete) |
 | `sensor_bridge` | `sensor-bridge/` | `ASensorManager` to a log file |

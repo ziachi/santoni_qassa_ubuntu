@@ -49,6 +49,12 @@ started, which is all this needs. `qrngp` is started explicitly because it
 normally waits on `sys.boot_completed`, which never arrives once Zygote is
 stopped below, and sshd wants the entropy.
 
+The same property is not a readiness signal for anything outside init either.
+With Zygote and `system_server` stopped, the framework never finishes booting,
+so `sys.boot_completed` stays unset for the life of the device. Readiness is
+`sshd listening on :22` in `/data/ubuntu-boot.log` plus an IPv4 address on
+`wlan0`; see [VPS-SETUP.md](VPS-SETUP.md#boot-readiness).
+
 | Step | What it does |
 |---|---|
 | Wake lock | `echo vps_server_lock > /sys/power/wake_lock`, so the SoC never suspends |
@@ -202,6 +208,8 @@ re-bind does not touch it.
 | sshd pidfile | rewrites `/run/sshd.pid` from the live listener, before and after `systemctl default`, and keeps it `0644` so non-root users can read it |
 | cron | `systemctl enable cron` + `systemctl start cron` when the unit or the init script exists, so `crontab` jobs actually run; `cron.service.d/pidfile.conf` points the shim at `/run/crond.pid` so `is-active` sees it |
 | CPU governor | picks `schedutil` (or `interactive`/`ondemand`) instead of pinning `performance` on a device with no heatsink |
+| Session bus | `user-session-bus.sh` starts a real `dbus-daemon --session` on `/run/user/<uid>/bus`, so tools that probe for a session bus before they will touch `systemctl --user` find one |
+| User services | starts every unit a user enabled in `~/.config/systemd/user/*.wants/`, the way `user@<uid>.service` does for a user with linger. Nothing else would: there is no logind, and `systemctl default` only walks the system target |
 
 `cron` is installed from `VPS_PACKAGES` in `vps-setup.sh` but nothing else
 enables it, so the cron step is what makes `crontab -e` useful. It runs after
