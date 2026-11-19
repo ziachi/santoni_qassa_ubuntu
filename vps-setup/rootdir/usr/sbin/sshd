@@ -10,4 +10,14 @@
 if [ $# -eq 0 ]; then
     ( sleep 5; [ -x /usr/local/sbin/boot-services.sh ] && /usr/local/sbin/boot-services.sh ) >/dev/null 2>&1 &
 fi
+# sshd runs on the Android side, outside this chroot's PAM stack, so pam_env
+# never applies /etc/environment to an SSH session. Export it here so every
+# session inherits the same PATH, EDITOR, VISUAL and PAGER a stock Ubuntu
+# Server login has, including non-interactive `ssh host cmd` invocations that
+# never source /etc/profile.
+if [ -r /etc/environment ] && sh -n /etc/environment 2>/dev/null; then
+    set -a
+    . /etc/environment
+    set +a
+fi
 exec /usr/sbin/sshd.real "$@"

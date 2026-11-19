@@ -95,6 +95,7 @@
 | 89 | - | - | docs: refresh the v1.2 proof screenshot and trim em dashes |
 | 90 | - | - | docs: document the TUI raw-mode freeze and the missing terminal size |
 | 91 | - | - | docs: correct the TUI freeze entry, empty $EDITOR falls back to vi |
+| 92 | - | - | vps-setup: standardise the CLI environment for every session type |
 
 ## Releases
 
@@ -2199,36 +2200,84 @@ already sets `EDITOR` and `VISUAL` to `nano`, `pam_env` is active in
 **Impact.** Documentation only, no image change. A user who hits the freeze now
 has the exit key and the recovery command instead of force-closing the terminal.
 
-### #91 — `$EDITOR` is empty in the chroot, so zeroclaw opens `vi`
+### #91 — SSH sessions do not inherit `/etc/environment`, so `$EDITOR` is empty
 
-**Problem.** `zeroclaw quickstart` asks `Edit system prompt in $EDITOR?` and then
-opens `vi` (`/usr/bin/vim.tiny`) instead of `nano`. `vi` is modal, so typing
-beeps and nothing appears, and there is no visible way out: the TUI reads as
-frozen and gets force-stopped. `/etc/environment` does set `EDITOR=nano` and
-`VISUAL=nano`, and `/etc/pam.d/sshd` does call `pam_env.so`, but `pam_env` never
-applies `/etc/environment` in this chroot. The session `PATH` is the seven-entry
-one, not the nine-entry one in `/etc/environment`, and `EDITOR` and `VISUAL` are
-absent from the environment in both a non-pty and a pty (`ssh -tt`) session.
-zeroclaw therefore falls back to `vi`.
+**Problem.** Any program that opens `$EDITOR` — `crontab -e`, `git commit`
+without `-m`, `sensible-editor`, `sudoedit`, `sudo -e`, or an application that
+shells out to the editor — opens `vi` (`/usr/bin/vim.tiny`) instead of `nano`.
+`vi` is modal, so typing beeps and nothing appears and there is no visible way
+out, which reads as a frozen program. `/etc/environment` does set `EDITOR=nano`
+and `VISUAL=nano`, and `/etc/pam.d/sshd` does call `pam_env.so`, but `pam_env`
+never applies `/etc/environment` to an SSH session in this chroot. The session
+`PATH` is the seven-entry one, not the nine-entry one in `/etc/environment`, and
+`EDITOR` and `VISUAL` are absent from the environment in both a non-pty and a
+pty (`ssh -tt`) session.
 
-**Evidence.** Driving the TUI in a pty and sampling the process tree at the
-moment the editor runs shows the child of `zeroclaw quickstart` is
+**Root cause.** sshd runs on the Android side, outside the chroot, so the
+chroot's PAM stack is never consulted for an SSH login. `su(1)` and `sudo(1)`
+do run inside the chroot and do apply `/etc/environment`, which is why the same
+account has `EDITOR=nano` under `sudo -i` but an empty `EDITOR` over SSH.
+
+**Evidence.** `ssh <host> env` shows no `EDITOR` and a seven-entry `PATH`, while
+`sudo -i bash -c 'echo $EDITOR'` shows `nano`. Driving a TUI in a pty and
+sampling the process tree at the moment the editor runs shows the child is
 `vi /tmp/edit-XXXXXXXX.txt`, not `nano`. The child's own `stty -a` reports
 `isig icanon iexten echo`, and the raw output carries `ESC[?1049l` before the
 editor draws and `ESC[?1049h` after it exits, so the TUI does restore the
-terminal and leave the alternate screen correctly. With `EDITOR=nano` present in
-the environment, `nano` 6.2 opens, edits and returns to the TUI normally.
+terminal and leave the alternate screen correctly.
 
-**Fix.** Export `EDITOR=nano` and `VISUAL=nano` from `~/.bashrc` and `~/.profile`
-for `ubuntu` and from `/root/.bashrc`, and ship the same lines in the chroot
-overlay (`vps-setup/rootdir/home/ubuntu/.bashrc`, `.profile`,
-`vps-setup/rootdir/root/.bashrc`, `.profile`) so a rebuilt chroot keeps them.
-`/etc/environment` is left as is: it is correct, it just never reaches the
-process.
+**Fix.** Standardise the CLI environment for every session type instead of
+patching one program; see #92.
 
 **Files.** `vps-setup/rootdir/home/ubuntu/.bashrc`,
 `vps-setup/rootdir/home/ubuntu/.profile`, `vps-setup/rootdir/root/.bashrc`,
 `vps-setup/rootdir/root/.profile`, `docs/VPS-SETUP.md`, `CHANGELOG.md`.
 
-**Impact.** `zeroclaw quickstart` now opens `nano` for the system prompt. No
-image change; the overlay applies on the next `vps-setup` run.
+**Impact.** Every program that opens `$EDITOR` now opens `nano`. No image
+change; the overlay applies on the next `vps-setup` run.
+
+### #92 — standardise the CLI environment for every session type
+
+**Problem.** #91 fixed the symptom per user, but the gap is wider than one
+program: the chroot's PAM stack never runs for an SSH login, so
+`/etc/environment` reaches `su` and `sudo` but not `ssh`. Anything that depends
+on a global variable — `EDITOR`, `VISUAL`, `PAGER`, `PATH`, `LANG` — behaves
+differently depending on how the session was opened.
+
+**Fix.** Cover every session type with the mechanism that actually applies to
+it:
+
+| Session | Mechanism |
+|---|---|
+| `ssh <host> <cmd>` (non-interactive) | `SetEnv` in `/etc/ssh/sshd_config` |
+| `ssh <host>` (login shell) | `/etc/profile.d/00-environment.sh` |
+| `bash -i` (interactive non-login) | `/etc/bash.bashrc` |
+| `sudo -i`, `sudo -s`, `su -` | `pam_env` (already worked) |
+| `sudo -e`, `sudo visudo`, `sudo crontab -e` | `env_keep` in `/etc/sudoers.d/10-editor` |
+| `sensible-editor`, `editor` | `update-alternatives` + `~/.selected_editor` |
+
+`/etc/environment` stays the single source of truth: the `profile.d` script and
+the `bash.bashrc` block source it, and `SetEnv` mirrors it for sessions that
+never start a shell. `/etc/default/locale` is set to `C.UTF-8`, the only locale
+the image generates, so no session can emit a locale warning.
+
+**Verification.** Two full rounds from a fresh SSH login, each covering
+`crontab -e`, `git commit` without `-m`, `sensible-editor`, `sudoedit`,
+`sudo -e`, `sudo visudo`, and a TUI that opens `$EDITOR`; plus `EDITOR`,
+`VISUAL`, `PAGER`, `PATH`, `LANG` and `TERM` as `ubuntu`, under `sudo -i` and
+`sudo -s`, and in a non-interactive `ssh <host> env`; plus `less`, `man` and
+`htop` in a pty. All open `nano`; `locale` writes nothing to stderr.
+
+**Files.** `vps-setup/rootdir/etc/environment`,
+`vps-setup/rootdir/etc/default/locale`,
+`vps-setup/rootdir/etc/profile.d/00-environment.sh`,
+`vps-setup/rootdir/etc/bash.bashrc`,
+`vps-setup/rootdir/etc/sudoers.d/10-editor`,
+`vps-setup/rootdir/etc/ssh/sshd_config`,
+`vps-setup/rootdir/home/ubuntu/.selected_editor`,
+`vps-setup/rootdir/root/.selected_editor`,
+`vps-setup/rootdir/usr/sbin/sshd`, `docs/VPS-SETUP.md`, `CHANGELOG.md`.
+
+**Impact.** No image change; the overlay applies on the next `vps-setup` run.
+`man` still prints the "system has been minimized" stub because the image ships
+no man pages; that is a packaging decision, not an environment bug.

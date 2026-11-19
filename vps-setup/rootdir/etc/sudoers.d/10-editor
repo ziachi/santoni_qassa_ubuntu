@@ -1,0 +1,5 @@
+# Keep the caller's editor choice across sudo, so `sudo -e`, `sudo visudo` and
+# `sudo crontab -e` open the same editor as the plain command. sudo resets the
+# environment by default, which drops EDITOR and VISUAL and leaves sudoedit
+# falling back to vi.
+Defaults env_keep += "EDITOR VISUAL SUDO_EDITOR PAGER"
