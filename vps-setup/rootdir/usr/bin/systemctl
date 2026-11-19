@@ -5353,6 +5353,16 @@ class Systemctl:
         if self.getsize(status_file):
             state = self.get_status_from(conf, "ActiveState", "")
             if state:
+                if state == "active":
+                    # ActiveState=active is only a claim written at start time.
+                    # The process can be gone since then (a service started
+                    # under sudo dies with the sudo session), so report what is
+                    # actually running instead of the stale claim.
+                    pid = self.read_mainpid_from(conf)
+                    if pid and (not pid_exists(pid) or pid_zombie(pid)):
+                        logg.log(DEBUG_STATUS, "get_status_from %s => active but PID %s is gone",
+                                 conf.name(), strE(pid))
+                        return "failed"
                 logg.log(DEBUG_STATUS, "get_status_from %s => %s", conf.name(), state)
                 return state
         pid = self.read_mainpid_from(conf)
@@ -5480,7 +5490,9 @@ class Systemctl:
         if conf is None:
             return True
         if not self.is_failed_from(conf):
-            return False
+            # Nothing to reset is a success, not an error: `reset-failed` on a
+            # unit that never failed must exit 0 like real systemctl.
+            return True
         done = False
         status_file = self.get_status_file_from(conf)
         if status_file and os.path.exists(status_file):
