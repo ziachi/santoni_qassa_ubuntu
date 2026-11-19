@@ -1,0 +1,13 @@
+#!/bin/sh
+# Weekly TRIM of the filesystem that holds the chroot.
+#
+# The fstrim package schedules this with fstrim.timer, and systemd timers do
+# not run in this chroot, so the job lives in cron.weekly instead. cron is
+# started by boot-services.sh on every boot and is the only scheduler that
+# actually fires here.
+#
+# Inside the chroot `/` is a directory on the device's /data partition, so
+# fstrim resolves it to that ext4 filesystem and trims the whole thing, not
+# just the chroot's share of it.
+set -e
+/usr/sbin/fstrim --verbose /

@@ -1,0 +1,21 @@
+# Logs written by the VPS overlay. /etc/logrotate.conf supplies the defaults
+# (weekly, rotate 4, compress); this block only overrides what it names.
+#
+# wtmp and btmp are already covered by /etc/logrotate.d/wtmp and
+# /etc/logrotate.d/btmp, which the logrotate package ships, so they are
+# deliberately not repeated here: a second entry for the same path is a hard
+# error ("duplicate log entry") and makes logrotate skip the whole file.
+#
+# copytruncate because the writers (init.ubuntu.sh, boot-services.sh) hold the
+# file open for the life of the boot and never reopen it on SIGHUP.
+/var/log/boot-services.log
+/var/log/vps-*.log
+{
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

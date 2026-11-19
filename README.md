@@ -52,7 +52,9 @@ was accepted.
 `htop`, `curl`, `git` and the rest of `VPS_PACKAGES` are installed by
 `vps-setup`, so `crontab -e` schedules jobs that survive a reboot, `systemctl
 is-active` reports the real state, and `sudo reboot` brings the device back with
-the chroot and sshd running again.
+the chroot and sshd running again. `logrotate` and a weekly `fstrim` run from
+`cron` as well, so `/var/log` cannot fill the data partition and the flash is
+trimmed on a schedule.
 
 ![htop inside the chroot on an idle device: 94 tasks, 170M of 1.77G used, no zygote and no system_server](docs/screenshots/htop-idle.png)
 
@@ -162,6 +164,7 @@ source-available terms; see [`vps-setup/LICENSE`](vps-setup/LICENSE).
 | `vps-setup` | `vps-setup/vps-setup.sh` | one-command Wi-Fi join and Ubuntu install |
 | `ubuntu-enter` | `ubuntu-enter/` | adb shell wrapper with the Wi-Fi password gate |
 | `boot-services` | `vps-setup/rootdir/` | chroot-side boot steps: setuid mounts, cron, CPU governor |
+| `logrotate` + `fstrim` | `vps-setup/rootdir/` | daily log rotation and a weekly TRIM, both scheduled by `cron` |
 | `suid-mount` | `vps-setup/rootdir/` | re-applies the setuid mounts the chroot needs |
 | `systemctl` shim | `vps-setup/rootdir/` | enough of systemd for installers and `is-active` |
 | `init.ubuntu.sh` / `.rc` | `rootdir/` | boot script and init service |

@@ -1,0 +1,20 @@
+#!/bin/sh
+# The logrotate package ships this as /etc/cron.daily/logrotate, but its first
+# check is `[ -d /run/systemd/system ] && exit 0`: it defers to the
+# logrotate.timer unit. This chroot has no systemd, and /run/systemd/system
+# exists anyway because Android's init creates it, so the packaged script exits
+# 0 without rotating anything and the logs grow until the data partition fills.
+# cron is the only scheduler here, so the guard is dropped and the job always
+# runs. Everything else is the packaged script, unchanged.
+
+# this cron job persists removals (purge) of the package
+if [ ! -x /usr/sbin/logrotate ]; then
+    exit 0
+fi
+
+/usr/sbin/logrotate /etc/logrotate.conf
+EXITVALUE=$?
+if [ $EXITVALUE != 0 ]; then
+    /usr/bin/logger -t logrotate "ALERT exited abnormally with [$EXITVALUE]"
+fi
+exit $EXITVALUE

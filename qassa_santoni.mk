@@ -159,4 +159,7 @@ PRODUCT_COPY_FILES += \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/boot-services.sh:system/etc/vps-setup/rootdir/usr/local/sbin/boot-services.sh \
     device/xiaomi/santoni/vps-setup/rootdir/usr/local/sbin/suid-mount.sh:system/etc/vps-setup/rootdir/usr/local/sbin/suid-mount.sh \
     device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.bashrc:system/etc/vps-setup/rootdir/home/ubuntu/.bashrc \
-    device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile
+    device/xiaomi/santoni/vps-setup/rootdir/home/ubuntu/.profile:system/etc/vps-setup/rootdir/home/ubuntu/.profile \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/logrotate.d/vps:system/etc/vps-setup/rootdir/etc/logrotate.d/vps \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/cron.daily/logrotate:system/etc/vps-setup/rootdir/etc/cron.daily/logrotate \
+    device/xiaomi/santoni/vps-setup/rootdir/etc/cron.weekly/fstrim:system/etc/vps-setup/rootdir/etc/cron.weekly/fstrim

@@ -96,6 +96,7 @@
 | 90 | - | - | docs: document the TUI raw-mode freeze and the missing terminal size |
 | 91 | - | - | docs: correct the TUI freeze entry, empty $EDITOR falls back to vi |
 | 92 | - | - | vps-setup: standardise the CLI environment for every session type |
+| 93 | - | - | vps-setup: rotate the logs and TRIM weekly from cron |
 
 ## Releases
 
@@ -2281,3 +2282,58 @@ the image generates, so no session can emit a locale warning.
 **Impact.** No image change; the overlay applies on the next `vps-setup` run.
 `man` still prints the "system has been minimized" stub because the image ships
 no man pages; that is a packaging decision, not an environment bug.
+
+### #93 — logs grow until the data partition fills, and nothing TRIMs the flash
+
+**Problem.** `/var/log` lives on the same 16 GB data partition as the chroot.
+Nothing rotated it: `logrotate` was not in `VPS_PACKAGES`, so the package was
+not even installed. `fstrim` was scheduled by `fstrim.timer`, and systemd timers
+do not run in this chroot, so the flash was never trimmed either.
+
+**Trial-Error.**
+- Installing `logrotate` alone is not enough. The packaged
+  `/etc/cron.daily/logrotate` starts with `[ -d /run/systemd/system ] && exit 0`
+  to defer to `logrotate.timer`. Android's init creates `/run/systemd/system`,
+  so the job exited 0 on every run and rotated nothing. Confirmed with `sh -x`:
+  the trace was `+ [ -d /run/systemd/system ]` then `+ exit 0`.
+- The first `/etc/logrotate.d/vps` also listed `/var/log/wtmp` and
+  `/var/log/btmp`. `logrotate -d` then reported
+  `error: vps:21 duplicate log entry for /var/log/btmp` and
+  `error: found error in file vps, skipping`, and the whole file was skipped.
+  The package already ships `/etc/logrotate.d/wtmp` and `/etc/logrotate.d/btmp`,
+  so those blocks were removed.
+- `run-parts` skips a cron file that is not executable, and `apply.sh` gave
+  every overlay file mode 644 by default. The cron scripts are matched
+  explicitly now.
+
+**Fix.**
+- `logrotate` added to `VPS_PACKAGES` and to `packages.list`.
+- `vps-setup/rootdir/etc/logrotate.d/vps`: weekly, `rotate 4`, `compress`,
+  `delaycompress`, `missingok`, `notifempty`, `copytruncate` for
+  `/var/log/boot-services.log` and `/var/log/vps-*.log`.
+- `vps-setup/rootdir/etc/cron.daily/logrotate`: the packaged script with the
+  systemd guard removed.
+- `vps-setup/rootdir/etc/cron.weekly/fstrim`: `fstrim --verbose /`.
+- `apply.sh` installs `etc/cron.daily/*` and `etc/cron.weekly/*` as 755 and
+  pins `/etc/logrotate.d`, `/etc/cron.daily` and `/etc/cron.weekly` to 755
+  `root:root`, because `run-parts` ignores a writable cron directory.
+- `qassa_santoni.mk` copies the three new files into
+  `/system/etc/vps-setup/rootdir`.
+- `docs/VPS-SETUP.md` gains "Log rotation and weekly TRIM", plus an
+  "Intentional by design" section that records ADB `:5555`,
+  `PermitRootLogin yes`, the default passwords and `NOPASSWD` as deliberate.
+
+**Verification.** In the device chroot: `logrotate -d /etc/logrotate.conf`
+printed no `error:` lines; `/etc/cron.daily/logrotate` exited 0 and wrote
+`/var/lib/logrotate/status`; a test log rotated to `.1` with the original
+truncated to 0 bytes; `/etc/cron.weekly/fstrim` trimmed 197.4 MiB and exited 0.
+
+**Files.** `vps-setup/vps-setup.sh`, `vps-setup/apply.sh`,
+`vps-setup/packages.list`, `vps-setup/rootdir/etc/logrotate.d/vps`,
+`vps-setup/rootdir/etc/cron.daily/logrotate`,
+`vps-setup/rootdir/etc/cron.weekly/fstrim`, `qassa_santoni.mk`,
+`docs/VPS-SETUP.md`, `README.md`, `CHANGELOG.md`.
+
+**Impact.** No image change until the next build; the overlay applies on the
+next `vps-setup` run. Logs are capped at four compressed weeks and the flash is
+trimmed weekly. `wtmp` and `btmp` keep rotating through the package's own files.

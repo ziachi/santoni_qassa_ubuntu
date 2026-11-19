@@ -186,6 +186,7 @@ libyaml-0-2	0.2.2-1build2
 libzstd1	1.4.8+dfsg-3build1
 locales	2.35-0ubuntu3.18
 login	1:4.8.1-2ubuntu2
+logrotate	3.19.0-1ubuntu1.1
 logsave	1.46.5-2ubuntu1
 lsb-base	11.1.0ubuntu4
 lsb-release	11.1.0ubuntu4

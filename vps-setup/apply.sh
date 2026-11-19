@@ -133,6 +133,10 @@ while IFS= read -r rel; do
         etc/sudoers.d/*)        mode=440; owner=root:root ;;
         usr/bin/systemctl|usr/sbin/sshd|usr/sbin/policy-rc.d|usr/sbin/runlevel|usr/local/bin/journalctl|usr/local/sbin/*.sh)
                                 mode=755; owner=root:root ;;
+        # run-parts skips anything in cron.daily/cron.weekly that is not
+        # executable, so these two must not fall through to the 644 default.
+        etc/cron.daily/*|etc/cron.weekly/*)
+                                mode=755; owner=root:root ;;
         *)                      mode=644; owner=root:root ;;
     esac
     put_file "$OVERLAY/$rel" "/$rel" "$mode" "$owner"
@@ -154,7 +158,10 @@ done
 # and `mkdir -p` creates a missing directory with the ambient umask. Pin the
 # directories the overlay writes into so a fresh chroot cannot end up with
 # "sudo: /etc/sudoers.d is world writable".
-for d in /etc/sudoers.d /etc/systemd/system/ssh.service.d; do
+# run-parts ignores a cron directory that is group- or world-writable, and
+# logrotate refuses a world-writable /etc/logrotate.d, so those are pinned too.
+for d in /etc/sudoers.d /etc/systemd/system/ssh.service.d \
+         /etc/logrotate.d /etc/cron.daily /etc/cron.weekly; do
     [ -d "$d" ] || continue
     chmod 755 "$d"
     chown root:root "$d"

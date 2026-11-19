@@ -305,7 +305,11 @@ fi
 # verification with "sudo: command not found". Install the standard server set
 # in the same pass so the overlay has something to work with.
 # cron is here because boot-services.sh enables it on every boot.
-VPS_PACKAGES="openssh-server sudo nano vim-tiny curl wget iputils-ping dnsutils net-tools procps htop git ca-certificates unzip less iproute2 cron"
+# logrotate is here because /var/log lives on the same 16 GB data partition as
+# the chroot: without rotation the boot log and the apt logs grow until the
+# device runs out of space. The overlay ships the config and the cron.daily
+# job, since the packaged job defers to a systemd timer that never runs here.
+VPS_PACKAGES="openssh-server sudo nano vim-tiny curl wget iputils-ping dnsutils net-tools procps htop git ca-certificates unzip less iproute2 cron logrotate"
 if chroot "$UBUNTU_ROOT" /bin/sh -c "$CHROOT_ENV; apt-get update && apt-get install -y $VPS_PACKAGES"; then
     echo "      apt finished"
 else

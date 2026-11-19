@@ -110,6 +110,24 @@ adb -s <device-ip>:5555 shell
 The property table and the `ubuntu-enter` behaviour matrix are in
 [ARCHITECTURE.md](ARCHITECTURE.md#adb-access-and-ubuntu-enter).
 
+## Intentional by design
+
+Four settings read like audit findings and are not. They are deliberate, they
+are what makes a headless device manageable on a private LAN, and they should
+not be "fixed" without the maintainer asking for it.
+
+| Setting | Where | Why it stays |
+|---|---|---|
+| `service.adb.tcp.port=5555` | `qassa_santoni.mk` | the recovery path. There is no screen and no launcher, so `adb connect <ip>:5555` is how a device that lost Wi-Fi or sshd gets reached again |
+| `PermitRootLogin yes` | `/etc/ssh/sshd_config` | root over SSH is the documented first login. The alternative is a key that has to be pushed over adb before the first login, which needs adb anyway |
+| default passwords (`santoniadmin`, `ubuntu`) | `/data/adb_wifi_pass`, `/data/ubuntu_root_pass`, `/data/ubuntu_user_pass` | a fresh install has to be reachable without a console. Every value is printed by `vps-setup` and stored `0600 root:root` on the device, so it is discoverable over USB |
+| `%sudo ALL=(ALL:ALL) NOPASSWD:ALL` | `/etc/sudoers.d/90-ubuntu-nopasswd` | the box is single-tenant and `ubuntu` is the only interactive account. A password prompt adds nothing when the same password is already in `/data/ubuntu_user_pass` |
+
+The trade-off is explicit and accepted: anyone who can reach port 5555 or port
+22 on the LAN gets root. That is fine on a bench device behind a home router
+and it is **not** a shipping configuration. If the device is ever exposed
+beyond the LAN, firewall 5555 and 22 first, then revisit this table.
+
 ## Login shell: `ubuntu-enter`
 
 `persist.sys.adb.shell=/system/bin/ubuntu-enter` makes every adb session go
@@ -194,6 +212,47 @@ adb shell cat /data/ubuntu-boot.log
 
 The last lines say whether sshd actually came up: `sshd started` followed by
 `sshd listening on :22`, or `sshd is NOT listening on :22` when it did not.
+
+## Log rotation and weekly TRIM
+
+`/var/log` lives on the same 16 GB data partition as the chroot, so an
+unrotated log is a slow-motion disk-full. Both jobs are scheduled by `cron`,
+not by systemd: this chroot has no systemd, and `cron` is started by
+`boot-services.sh` on every boot.
+
+| Job | Path | Schedule |
+|---|---|---|
+| log rotation | `/etc/cron.daily/logrotate` | daily, rotates weekly per `/etc/logrotate.conf` |
+| TRIM | `/etc/cron.weekly/fstrim` | weekly |
+
+`/etc/logrotate.d/vps` covers the logs the overlay writes,
+`/var/log/boot-services.log` and `/var/log/vps-*.log`, with `copytruncate`
+because the writers hold the file open for the whole boot. `wtmp` and `btmp`
+are left to the `wtmp` and `btmp` files the package ships: a second entry for
+the same path is a hard error and makes logrotate skip the entire file.
+
+The packaged `/etc/cron.daily/logrotate` starts with
+`[ -d /run/systemd/system ] && exit 0`, deferring to `logrotate.timer`. Android's
+init creates `/run/systemd/system`, so the packaged job exits 0 without
+rotating anything. The overlay ships a copy with that guard removed.
+
+Check both by hand:
+
+```bash
+# dry run: prints what it would rotate, and any config error
+sudo logrotate -d /etc/logrotate.conf
+
+# run the real jobs now
+sudo /etc/cron.daily/logrotate; echo "logrotate exit=$?"
+sudo /etc/cron.weekly/fstrim;  echo "fstrim exit=$?"
+
+# what cron has actually done
+sudo grep -i logrotate /var/log/syslog | tail
+```
+
+`logrotate -d` must print no `error:` lines. A `duplicate log entry` error
+means a path is listed twice, usually because a local file repeats `wtmp` or
+`btmp`.
 
 ## Troubleshooting
 
