@@ -2512,3 +2512,42 @@ gateway process stays up.
 
 **Impact.** Supervised daemons that check for a service manager now start
 normally.
+
+### #99 — enabled user services did not start after a reboot
+
+**Problem.** `hermes gateway install` enabled `hermes-gateway.service` in
+`~/.config/systemd/user/default.target.wants/` and started it, and the gateway
+ran until the device was rebooted. After `adb reboot` the unit was `inactive
+(dead)` and `hermes gateway status` reported the gateway stopped, with no error
+anywhere: `boot-services.sh` ran, started the session bus, and finished.
+Nothing ever started a user unit. `systemctl default` only walks the system
+target, and there is no logind to start `user@<uid>.service`, so an enabled
+user unit was started exactly once, by the installer, and never again.
+
+A second problem was waiting behind it. `/run` is a plain directory on `/data`
+here, not a tmpfs, so the status file a unit wrote before the reboot survived
+it. Android reuses pids quickly, so the recorded `MainPID` could name an
+unrelated process that was alive, and the shim would then report the unit
+running and skip the start.
+
+**Fix.** `boot-services.sh` starts every unit in
+`~/.config/systemd/user/*.wants/` for every human user, as that user, with
+`HOME`, `USER`, `LOGNAME`, `SHELL`, `PATH`, `XDG_RUNTIME_DIR` and
+`DBUS_SESSION_BUS_ADDRESS` set, after `user-session-bus.sh` has created the
+runtime directory and the bus. It also drops status files that did not come
+from the current boot. The shim stamps every status file with
+`/proc/sys/kernel/random/boot_id` and ignores a record written in an earlier
+boot, so a reused pid can no longer make a dead unit look alive.
+
+**Verification.** Three full `install` → `adb reboot` → check → `uninstall`
+rounds on the device, each with `hermes-gateway.service` and a generic
+`ExecStart=/bin/sleep 300` unit enabled. After every reboot, with no manual
+`start`, `boot-services.log` recorded both units as `active`,
+`systemctl --user is-active` agreed, the gateway process was in `ps`, and
+`hermes gateway status` reported `active (running)`.
+
+**Files.** `vps-setup/rootdir/usr/local/sbin/boot-services.sh`,
+`vps-setup/rootdir/usr/bin/systemctl`, `docs/VPS-SETUP.md`.
+
+**Impact.** A service a user enables survives a reboot, which is what
+`loginctl enable-linger` promises and what every installer assumes.

@@ -628,6 +628,22 @@ def shutil_truncate(filename: str) -> None:
     with open(filename, "w") as f:
         f.write("")
 
+_boot_id: Optional[str] = None
+def get_boot_id() -> str:
+    """ identity of the running boot, so a status file written before the last
+        reboot can be told apart from one written a moment ago. /run is a plain
+        directory on /data on this device, not a tmpfs, so status files survive
+        a reboot, and Android reuses pids fast enough that the recorded MainPID
+        can name an unrelated process that is alive right now. """
+    global _boot_id
+    if _boot_id is None:
+        try:
+            with open("/proc/sys/kernel/random/boot_id") as f:
+                _boot_id = f.read().strip()
+        except OSError:
+            _boot_id = ""
+    return _boot_id
+
 # http://stackoverflow.com/questions/568271/how-to-check-if-there-exists-a-process-with-a-given-pid
 def pid_exists(pid: int) -> bool:
     """Check whether pid exists in the current process table."""
@@ -3214,6 +3230,14 @@ class Systemctl:
                     except KeyError: pass
                 else:
                     conf.status[key] = strE(value)
+        # Stamp the record with the boot it belongs to. Without it a status
+        # file from the previous boot is indistinguishable from a live one:
+        # its MainPID may have been handed to an unrelated process, and the
+        # "pid is alive" test would then call the unit running and skip the
+        # start that the reboot made necessary.
+        boot_id = get_boot_id()
+        if boot_id:
+            conf.status["BootID"] = boot_id
         try:
             with open(status_file, "w") as f:
                 for key in sorted(conf.status):
@@ -3252,6 +3276,11 @@ class Systemctl:
                             logg.warning("[status] ignored %s", line.strip())
         except (OSError, ValueError) as e:
             logg.warning("[status] bad read of status file '%s' >> %s", status_file, e)
+        boot_id = get_boot_id()
+        recorded = status.get("BootID")
+        if boot_id and recorded and recorded != boot_id:
+            logg.log(DEBUG_STATUS, "[status] %s was written in a previous boot, ignored", status_file)
+            return {}
         return status
     def get_status_from(self, conf: SystemctlConf, name: str, default: Optional[str] = None) -> Optional[str]:
         if conf.status is None:

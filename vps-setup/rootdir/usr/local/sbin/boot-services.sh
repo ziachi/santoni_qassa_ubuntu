@@ -76,6 +76,73 @@ start_cron() {
 }
 start_cron
 
+# Nothing here runs logind, so no user manager starts the units a user enabled
+# in ~/.config/systemd/user. `systemctl default` only walks the system target,
+# so an enabled user unit stayed inactive (dead) after every reboot and had to
+# be started by hand. Start them here, the way systemd's user@<uid>.service
+# does for a user with linger.
+as_user() {
+    user=$1
+    shift
+    uid=$(id -u "$user" 2>/dev/null) || return 1
+    home=$(getent passwd "$user" | cut -d: -f6)
+    [ -n "$home" ] && [ -d "$home" ] || return 1
+    runuser -u "$user" -- env -i \
+        HOME="$home" USER="$user" LOGNAME="$user" SHELL=/bin/bash \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        XDG_RUNTIME_DIR="/run/user/$uid" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+        "$@"
+}
+
+# /run is a plain directory on /data here, not a tmpfs, so the status files a
+# unit wrote before the reboot are still there. Android reuses pids fast, so a
+# recorded MainPID can name an unrelated process that is alive right now, and
+# the shim would then believe the unit is already running and skip the start.
+# Drop every record that did not come from this boot.
+clean_stale_user_state() {
+    user=$1
+    uid=$(id -u "$user" 2>/dev/null) || return 0
+    dir=/run/user/$uid/run
+    [ -d "$dir" ] || return 0
+    boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    for f in "$dir"/*.status; do
+        [ -e "$f" ] || continue
+        recorded=$(sed -n 's/^BootID=//p' "$f" 2>/dev/null | head -1)
+        if [ -n "$boot_id" ] && [ -n "$recorded" ] && [ "$recorded" != "$boot_id" ]; then
+            rm -f "$f"
+            continue
+        fi
+        pid=$(sed -n 's/^MainPID=//p' "$f" 2>/dev/null | head -1)
+        if [ -n "$pid" ] && [ ! -d "/proc/$pid" ]; then
+            rm -f "$f"
+        fi
+    done
+}
+
+start_user_units() {
+    for user in $(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 {print $1}'); do
+        home=$(getent passwd "$user" | cut -d: -f6)
+        [ -n "$home" ] && [ -d "$home" ] || continue
+        [ -d "$home/.config/systemd/user" ] || continue
+        clean_stale_user_state "$user"
+        seen=" "
+        for wants in "$home"/.config/systemd/user/*.wants; do
+            [ -d "$wants" ] || continue
+            for link in "$wants"/*.service "$wants"/*.socket; do
+                [ -e "$link" ] || continue
+                unit=$(basename "$link")
+                case "$seen" in *" $unit "*) continue ;; esac
+                seen="$seen$unit "
+                as_user "$user" /usr/bin/systemctl --user start "$unit" >/dev/null 2>&1
+                state=$(as_user "$user" /usr/bin/systemctl --user is-active "$unit" 2>/dev/null)
+                echo "  user unit $user/$unit -> ${state:-unknown}"
+            done
+        done
+    done
+}
+start_user_units
+
 # Adaptive governor, not performance. This device runs without a heatsink, and
 # `performance` pins every core at its maximum frequency even at idle. schedutil
 # scales with load and drops back when the box is quiet, while the kernel's own

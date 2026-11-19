@@ -290,6 +290,36 @@ session ends, which is what linger asks for. `user-session-bus.sh` runs from
 `/run/user/<uid>/bus`, so tools that probe for a session bus before they will
 touch `systemctl --user` find one.
 
+### User services at boot
+
+`boot-services.sh` starts every unit a user enabled in
+`~/.config/systemd/user/*.wants/`, once the session bus is up, the way systemd's
+`user@<uid>.service` does for a user with linger. Nothing else would: there is
+no logind, and `systemctl default` only walks the system target, so an enabled
+user unit stayed `inactive (dead)` after a reboot and had to be started by hand.
+
+```bash
+# what boot-services started, and what it found
+grep 'user unit' /var/log/boot-services.log
+systemctl --user is-active myapp.service
+```
+
+`/run` is a plain directory on `/data` here, not a tmpfs, so a unit's status
+file survives the reboot that killed its process. Android reuses pids quickly,
+so the recorded `MainPID` can name an unrelated process that is alive right
+now. Each status file is stamped with the boot id it was written in, and a
+record from an earlier boot is ignored, so `is-active` reports `inactive` and
+the next `start` really starts the unit.
+
+### cgroups: `sudo` and Android's `libprocessgroup`
+
+Android's `libprocessgroup` owns the cgroup tree and reaps a process group when
+the session that created it goes away. A daemon started by hand under `sudo`
+lands in the sudo session's cgroup and is killed when that session ends, which
+looks like a service that starts and then dies. Start services through
+`systemctl` (system or `--user`) instead: the shim detaches the child with
+`setsid`, so it is not tied to the shell that asked for it.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
