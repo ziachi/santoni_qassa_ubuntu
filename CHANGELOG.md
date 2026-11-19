@@ -93,6 +93,7 @@
 | 87 | - | - | vps-setup: make crond.pid readable so is-active works for non-root |
 | 88 | - | - | docs: add index README inside docs directory |
 | 89 | - | - | docs: refresh the v1.2 proof screenshot and trim em dashes |
+| 90 | - | - | docs: document the TUI raw-mode freeze and the missing terminal size |
 
 ## Releases
 
@@ -2168,3 +2169,28 @@ stop, so the prose reads like a person wrote it.
 
 **Impact.** The README and the release page show the build that is actually
 published, and the docs no longer read like a generated wall of dashes.
+
+### #90 — a full-screen TUI in the chroot looks like a frozen shell
+
+**Problem.** `zeroclaw quickstart` is a full-screen TUI: it switches to the
+alternate screen, hides the cursor and puts the pty in raw mode. In raw mode
+Ctrl+C is delivered as a key event instead of SIGINT, so the interrupt never
+reaches the process and the only exit is Esc. When the process is force-stopped
+instead, the terminal stays in the alternate screen with echo off, which reads
+as a dead shell that has to be closed. The same command also refuses to start
+when the pty reports no size, which is what a client that sends no window size,
+or a `script` wrapper, produces.
+
+**Fix.** Add both cases to the troubleshooting table in `docs/VPS-SETUP.md`:
+Esc is the exit, `reset` or `stty sane` recovers a terminal left behind by a
+force-stopped TUI, and `stty rows 40 cols 100` or `zeroclaw config set` covers
+the missing-size case. The chroot itself needed no change: `/etc/environment`
+already sets `EDITOR` and `VISUAL` to `nano`, `pam_env` is active in
+`/etc/pam.d/sshd`, `nano` 6.2 is installed, the terminfo entries for `xterm`,
+`xterm-256color` and `screen-256color` are present, and `/dev/ptmx` plus the
+`devpts` mount allocate a pty correctly.
+
+**Files.** `docs/VPS-SETUP.md`, `CHANGELOG.md`.
+
+**Impact.** Documentation only, no image change. A user who hits the freeze now
+has the exit key and the recovery command instead of force-closing the terminal.
