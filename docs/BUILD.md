@@ -60,14 +60,14 @@ rm -rf device/xiaomi/santoni
 git clone https://github.com/ziachi/santoni_qassa_ubuntu.git \
     device/xiaomi/santoni -b main
 
-# Vendor blobs — the repo root holds a single santoni/ directory, so clone it
+# Vendor blobs: the repo root holds a single santoni/ directory, so clone it
 # one level up. Cloning into vendor/xiaomi/santoni doubles the path and lunch
 # fails with "vendor/xiaomi/santoni/santoni-vendor.mk" does not exist.
 rm -rf vendor/xiaomi
 git clone https://github.com/ziachi/vendor_xiaomi_santoni_qassa.git \
     vendor/xiaomi -b qassa-ubuntu
 
-# Kernel headers — REQUIRED, even though the boot image is prebuilt.
+# Kernel headers: REQUIRED, even though the boot image is prebuilt.
 # Soong's generated_kernel_includes module runs
 # "make -C kernel/xiaomi/msm8937 headers_install", and external/tinycompress
 # plus hardware/qassa/interfaces/cryptfshw/1.0 consume the output. Without

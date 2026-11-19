@@ -43,7 +43,7 @@ on boot
 
 The trigger used to be `on property:sys.boot_completed=1`. That property is only
 set once the framework finishes booting, and on a device with nothing to boot
-for it can stay unset for a long time — the first boot after a data wipe spends
+for it can stay unset for a long time: the first boot after a data wipe spends
 minutes in dex2oat. `on boot` runs after `/data` is mounted and after Zygote has
 started, which is all this needs. `qrngp` is started explicitly because it
 normally waits on `sys.boot_completed`, which never arrives once Zygote is
@@ -51,7 +51,7 @@ stopped below, and sshd wants the entropy.
 
 | Step | What it does |
 |---|---|
-| Wake lock | `echo vps_server_lock > /sys/power/wake_lock` — the SoC never suspends |
+| Wake lock | `echo vps_server_lock > /sys/power/wake_lock`, so the SoC never suspends |
 | ZRAM | checks `/sys/block/zram0/disksize`; resizes to 2147483648 bytes and `mkswap` + `swapon` when it differs |
 | Password file | creates `/data/adb_wifi_pass` with `santoniadmin` when missing, then `chmod 600` + `chown 0:0` |
 | Headless | `stop surfaceflinger`, `stop vendor.hwcomposer-2-1`, `stop zygote`, `stop zygote_secondary`, then `echo 0 > /sys/class/leds/lcd-backlight/brightness` |
@@ -68,7 +68,7 @@ takes `-o rbind` / `-o rslave`, util-linux takes `--rbind` / `--make-rslave`,
 and busybox is used when the built-in mount understands neither.
 
 `fstab.qcom` already asks for `zramsize=2147483648`, so the ZRAM step is
-normally just a check — it exists for a device that booted with the old 1 GB
+normally just a check. It exists for a device that booted with the old 1 GB
 fstab.
 
 ### Why the headless step runs before Wi-Fi
@@ -145,7 +145,7 @@ SystemUI VpnDialogs WallpaperBackup WallpaperCropper WallpaperPicker2
 XiaomiAddon XiaomiParts
 ```
 
-`GCam` and `XiaomiAddon` are on that list. They are **not** in the image — a
+`GCam` and `XiaomiAddon` are on that list. They are **not** in the image. A
 headless build has no UI to show them in, and Zygote is stopped at boot so they
 could never run.
 
@@ -173,8 +173,8 @@ never reach the image. `PRODUCT_PACKAGES_REMOVE` does not exist in this tree.
 
 The stub has to be installed for the override to apply, so `RemovePackages` is
 listed in `PRODUCT_PACKAGES` in `device.mk`. Keep the two lists in sync. A name
-that does not match a module is harmless — the override silently does nothing —
-so the list can be extended without risk.
+that does not match a module is harmless, because the override silently does
+nothing, so the list can be extended without risk.
 
 > `debloat/` is not the debloat mechanism. It holds a single Dolby stub
 > manifest and nothing else.
@@ -277,8 +277,8 @@ process. It reads `/proc/<pid>/cmdline` and only skips the start when that
 process really is `udhcpc`.
 
 Inside the chroot the same CLI is available as `/usr/local/bin/wifi`. It chroots
-back into Android's root, so `/proc` has to be mounted — the boot script does
-that.
+back into Android's root, so `/proc` has to be mounted, which the boot script
+does.
 
 The `WifiShellCommand` backports in `patches/` are no longer used by anything.
 They stay in the tree because they are harmless.
@@ -308,8 +308,8 @@ through a dual-auth wrapper:
 |---|---|
 | USB attached (`/sys/class/android_usb/android0/state` = `CONFIGURED`) | straight in, no password |
 | Wi-Fi only (`DISCONNECTED`) | `ADB Wi-Fi Password:` prompt, 3 tries, then the session is closed |
-| `DEBUG_NO_PASSWORD=0` (current) | gate active — the two rows above apply |
-| `DEBUG_NO_PASSWORD=1` | prompt skipped on every transport — debug only, never ship |
+| `DEBUG_NO_PASSWORD=0` (current) | gate active, the two rows above apply |
+| `DEBUG_NO_PASSWORD=1` | prompt skipped on every transport, debug only, never ship |
 | Ubuntu installed (`/data/ubuntu/bin/bash`) | `chroot /data/ubuntu /bin/bash -l` as root |
 | Ubuntu not installed | drops to `/system/bin/sh` with a hint to run `vps-setup` |
 
@@ -328,21 +328,21 @@ The password is read from `/data/adb_wifi_pass`, which `vps-setup` and
 Three bridges live in the device tree and are **built into the image**. They are
 Android-side helpers that expose hardware the chroot cannot reach on its own.
 
-### `webcam-bridge` — camera
+### `webcam-bridge`: camera
 
 Camera2 NDK to MJPEG. `/dev/video*` on MSM8937 is not UVC, so the NDK is the
 only entry point. Missing: JPEG encode, the repeating request, and the MJPEG
-server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot —
-`cameraserver` rejects clients outside the `camera` group.
+server on `127.0.0.1:8080`. Run it as `camera`, not as root from the chroot,
+because `cameraserver` rejects clients outside the `camera` group.
 
-### `audio-bridge` — speaker and mic
+### `audio-bridge`: speaker and mic
 
 PulseAudio config only. The unix socket is `/data/ubuntu/tmp/pulse.sock` and the
 sink/source go through OpenSL ES so the Android audio HAL keeps the mixer. The
 arm64 PulseAudio binary and the `module-sles-*` modules are **not** in this
 tree; the config fails to load until they are installed in the chroot.
 
-### `sensor-bridge` — sensors
+### `sensor-bridge`: sensors
 
 `ASensorManager` to `/data/ubuntu/tmp/sensors.log`, one line per sample. Reading
 `/dev/input` directly would split the evdev queue with `system_server`. The log
@@ -377,4 +377,4 @@ Plain `chroot` is fully supported.
 > The kernel is a **prebuilt binary**, not built from this tree. The
 > `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output. To
 > change a kernel option you need a new `Image.gz-dtb` from the Luuvy
-> maintainer — the source is not public.
+> maintainer, because the source is not public.

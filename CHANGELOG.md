@@ -1,4 +1,4 @@
-# CHANGELOG — santoni_qassa_ubuntu
+# CHANGELOG: santoni_qassa_ubuntu
 
 ## Commits
 
@@ -92,11 +92,13 @@
 | 86 | - | - | vps-setup: start cron even when a stale pidfile survives reboot |
 | 87 | - | - | vps-setup: make crond.pid readable so is-active works for non-root |
 | 88 | - | - | docs: add index README inside docs directory |
+| 89 | - | - | docs: refresh the v1.2 proof screenshot and trim em dashes |
 
 ## Releases
 
 | Version | Date | Build | Size (B) | SHA-256 | Notes |
 |---------|------|-------|----------|---------|-------|
+| v1.2 | 2026-11-18 | qassa_ubuntu22-ziachi-santoni.zip | 547173448 | `24509786f13528d7ac1d51ea9ca7a90c04bcdfc16f356c785ed40247602a59f0` | v1.2 (`fdf4598`): cron, iproute2, systemctl and reboot fixed; 88/88 checks passed |
 | v1.1 | 2026-11-16 | qassa_ubuntu22-ziachi-santoni.zip | 545707833 | `199a1eafc5eec73948a8bd4d04c1839496e89e213a11e20e7f52a4eb1219cccc` | v32 (`86f58bd`) — devpts and the stale wpa_supplicant socket fixed; flashed and verified on the device |
 | v1 | 2026-11-16 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20261116-0554-Vanilla-signed.zip | 640482400 | `bead5e737f20426f21f98a31c14d533d7a3cbf6f1b06d84819176de5c4f1dfe9` | v22 (`b2da746`) — first headless build published |
 | v20 | 2026-06-19 | qassa_Sisu-v2.4_0.s-UNOFFICIAL-santoni-20260619-0327-Vanilla-signed.zip | - | - | Clean build: Override removed, Dolby removed, PinnerService fixed, Spectrum added |
@@ -2125,18 +2127,44 @@ real state for `ubuntu` as well as `root`.
 
 ### #88 — `docs/` had no landing page
 
-**Problem.** `docs/` held three long reference files — `ARCHITECTURE.md`,
-`VPS-SETUP.md`, `BUILD.md` — plus `bug-analysis/` and `screenshots/`. Opening
+**Problem.** `docs/` held three long reference files (`ARCHITECTURE.md`,
+`VPS-SETUP.md`, `BUILD.md`) plus `bug-analysis/` and `screenshots/`. Opening
 the folder on GitHub showed a bare file list: nothing said which file answers
 which question, and `README.md` linked each file individually, so the folder
 itself was never a destination.
 
-**Fix.** Add `docs/README.md` as the folder index — a short summary of what the
+**Fix.** Add `docs/README.md` as the folder index: a short summary of what the
 folder is for, a navigation table with one line per file, the supporting
-material, and a "where to start" list — and point the `## Documentation` table in
+material, and a "where to start" list. Point the `## Documentation` table in
 `README.md` at it.
 
 **Files.** `docs/README.md`, `README.md`, `CHANGELOG.md`.
 
 **Impact.** `docs/` renders as a readable page on GitHub, and the README links
 the index instead of leaving the folder unlinked.
+
+### #89 — the proof screenshot was from a prerelease build
+
+**Problem.** The README and the v1.2 release both showed
+`docs/screenshots/ssh-ubuntu-2204.jpg`, a capture from an early prerelease
+build taken next to the phone. It predates the `cron`, `iproute2` and
+`systemctl` fixes, so the numbers in it (274 dpkg packages, 31 minutes uptime)
+no longer matched what a v1.2 flash reports, and the prose around it described
+a phone that is not in the frame.
+
+**Fix.** Replace it with `docs/screenshots/neofetch-v1.2.png`, a `neofetch`
+capture from a v1.2 build over SSH: 314 dpkg packages, 256 MiB of 1817 MiB in
+use, 39 minutes uptime, bash 5.1.16 on `/dev/pts/0`. Update the field table to
+the values in that capture, move the `htop` numbers into the paragraph that
+describes the `htop` image, and point the v1.2 release notes at the new file.
+The same pass removes the em dashes from `README.md`, `AGENTS.md`,
+`docs/README.md`, `docs/ARCHITECTURE.md`, `docs/VPS-SETUP.md` and
+`docs/BUILD.md`, replacing them with commas, colons, parentheses or a full
+stop, so the prose reads like a person wrote it.
+
+**Files.** `README.md`, `AGENTS.md`, `docs/README.md`, `docs/ARCHITECTURE.md`,
+`docs/VPS-SETUP.md`, `docs/BUILD.md`, `docs/screenshots/neofetch-v1.2.png`,
+`docs/screenshots/ssh-ubuntu-2204.jpg` (removed), `CHANGELOG.md`.
+
+**Impact.** The README and the release page show the build that is actually
+published, and the docs no longer read like a generated wall of dashes.

@@ -1,14 +1,14 @@
 # Documentation
 
-Deep technical reference for **santoni_qassa_ubuntu** — a Xiaomi Redmi 4X
+Deep technical reference for **santoni_qassa_ubuntu**, a Xiaomi Redmi 4X
 (`santoni`) running keepQASSA Sisu v2.4_0.s (Android 10 / Q) reduced to a
 headless Ubuntu 22.04 arm64 server.
 
 The [project README](../README.md) is the quick start: what the image is, the
 default credentials, and the four commands that take a freshly flashed device to
-an SSH session. This folder is the long form — why the boot sequence is ordered
-the way it is, what `vps-setup` does step by step, and how to build the ZIP
-yourself.
+an SSH session. This folder is the long form. It explains why the boot sequence
+is ordered the way it is, what `vps-setup` does step by step, and how to build
+the ZIP yourself.
 
 ## Contents
 
@@ -23,13 +23,13 @@ yourself.
 | Path | What it is |
 |---|---|
 | [bug-analysis/](bug-analysis/) | Post-mortems for the two bootloops that were traced to their root cause: `allocator@3.0` and `privapp-permissions`. |
-| [screenshots/](screenshots/) | The proof images used in the README: SSH into the chroot, and `htop` on an idle device. |
+| [screenshots/](screenshots/) | The proof images used in the README: `neofetch` over SSH on a v1.2 build, and `htop` on an idle device. |
 
 ## Where to start
 
-- **First time on the device** — [Quick Start](../README.md#quick-start), then [VPS-SETUP.md](VPS-SETUP.md).
-- **Why the image is built this way** — [ARCHITECTURE.md](ARCHITECTURE.md).
-- **Building the ZIP yourself** — [BUILD.md](BUILD.md).
-- **Before changing anything** — the hard rules in [AGENTS.md](../AGENTS.md) and the history in [CHANGELOG.md](../CHANGELOG.md).
+- **First time on the device:** [Quick Start](../README.md#quick-start), then [VPS-SETUP.md](VPS-SETUP.md).
+- **Why the image is built this way:** [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Building the ZIP yourself:** [BUILD.md](BUILD.md).
+- **Before changing anything:** the hard rules in [AGENTS.md](../AGENTS.md) and the history in [CHANGELOG.md](../CHANGELOG.md).
 
 Back to the [project README](../README.md).

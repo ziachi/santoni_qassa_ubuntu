@@ -1,4 +1,4 @@
-# AGENTS.md — instructions for AI agents
+# AGENTS.md: instructions for AI agents
 
 This file is the entry point for any AI agent (Viktor, Cursor, Copilot, Claude,
 Codex, or a crawler) working on this repository. It is the only place the
@@ -27,10 +27,10 @@ bug.
 
 ## Read before changing anything
 
-1. `README.md` — overview, quick start, credentials.
-2. `CHANGELOG.md` — one section per change, with Problem / Fix / Files / Impact.
-3. `docs/ARCHITECTURE.md` — boot sequence, package removal, hardware bridges.
-4. `vps-setup/` — the part that runs as root on the device. It is small; read it.
+1. `README.md`: overview, quick start, credentials.
+2. `CHANGELOG.md`: one section per change, with Problem / Fix / Files / Impact.
+3. `docs/ARCHITECTURE.md`: boot sequence, package removal, hardware bridges.
+4. `vps-setup/`: the part that runs as root on the device. It is small; read it.
 
 ## Hard rules
 
@@ -52,7 +52,7 @@ bug.
 ## Project context
 
 - Base is **keepQASSA** (Android 10 / Q), NOT LineageOS, NOT Matrixx
-- The build is a **headless Ubuntu VPS**, not a phone ROM — do not add UI
+- The build is a **headless Ubuntu VPS**, not a phone ROM. Do not add UI
   packages back, and do not treat a missing launcher as a bug
 - Build system: standard AOSP Make (`mka`)
 - ROM manifest: `https://github.com/keepQASSA/manifest.git` branch `Q`
@@ -70,8 +70,8 @@ mka installclean && mka qassa
 
 `out/` grows past 200 GB. Check `df -h` first.
 
-- `mka installclean` — frees ~10-15 GB, keeps compiled objects, rebuild ~1-3 hr
-- `mka clean` — frees everything, full rebuild ~4-8 hr
+- `mka installclean`: frees ~10-15 GB, keeps compiled objects, rebuild ~1-3 hr
+- `mka clean`: frees everything, full rebuild ~4-8 hr
 
 Full prerequisites and the clone steps are in `docs/BUILD.md`.
 
@@ -81,9 +81,9 @@ Full prerequisites and the clone steps are in `docs/BUILD.md`.
 |------|-----|
 | Remove another APK from the image | add its module name to `LOCAL_OVERRIDES_PACKAGES` in `prebuilts/Android.mk` |
 | Change build prop | edit `system.prop` or `qassa_santoni.mk` `PRODUCT_PROPERTY_OVERRIDES` |
-| Fix SELinux denial | add rules to `sepolicy/vendor/`. The headless build runs permissive (rule 2), so denials are logged rather than fatal — still fix the rule, and revert to Enforcing for a phone build |
+| Fix SELinux denial | add rules to `sepolicy/vendor/`. The headless build runs permissive (rule 2), so denials are logged rather than fatal. Still fix the rule, and revert to Enforcing for a phone build |
 | Add overlay | put XML in `overlay/` or `overlay-lineage/` |
-| Change kernel config | not possible from this tree — the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
+| Change kernel config | not possible from this tree: the boot image is the prebuilt Luuvy C.4.0 `Image.gz-dtb`. The `kernel/xiaomi/msm8937` checkout only supplies `headers_install` output |
 | Change boot behaviour | `rootdir/init.ubuntu.sh` (script) and `rootdir/init.ubuntu.rc` (service) |
 
 ## GPG signing

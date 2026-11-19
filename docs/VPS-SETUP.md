@@ -9,11 +9,11 @@ behind these steps, see [ARCHITECTURE.md](ARCHITECTURE.md).
 From a freshly flashed device to an SSH session, in order:
 
 ```bash
-# 1. USB — no RSA prompt, adbd is already root
+# 1. USB: no RSA prompt, adbd is already root
 adb devices
 adb shell id                      # uid=0(root)
 
-# 2. USB — join Wi-Fi and install Ubuntu 22.04 in one command
+# 2. USB: join Wi-Fi and install Ubuntu 22.04 in one command
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 # 3. note the IP the script prints, then move to Wi-Fi ADB
@@ -41,7 +41,7 @@ adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 It does eight things:
 
-1. `/system/bin/wifi connect <SSID> <PASSWORD>` — brings `wlan0` up, starts
+1. `/system/bin/wifi connect <SSID> <PASSWORD>` brings `wlan0` up, starts
    `wpa_supplicant` when needed, adds the network through `wpa_cli` and saves
    the credentials to `/data/vps_wifi.conf`. `svc wifi` and `cmd wifi` are not
    used: both go through `system_server`, which the boot script stops.
@@ -92,7 +92,7 @@ prohibit-password` back.
 ## ADB access
 
 ```bash
-# Over USB — no on-screen confirmation needed
+# Over USB: no on-screen confirmation needed
 adb devices
 adb shell
 
@@ -133,7 +133,7 @@ echo 'santoniadmin' | adb -s <device-ip>:5555 shell getprop ro.product.model
 > See [patches/README.md](../patches/README.md).
 
 > **Security:** port 5555 gives a root shell to anyone who can reach it. The
-> password gate is the only thing in front of it — firewall 5555 to trusted
+> password gate is the only thing in front of it, so firewall 5555 to trusted
 > networks if the device is ever exposed.
 
 ## Changing the ADB Wi-Fi password
@@ -199,7 +199,7 @@ The last lines say whether sshd actually came up: `sshd started` followed by
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID — santoni is 2.4 GHz only |
+| `vps-setup: no IP on wlan0, check SSID/password` | wrong SSID or password, or a 5 GHz-only AP | re-run with the exact SSID, santoni is 2.4 GHz only |
 | `wifi: add_network failed` | `wpa_supplicant` is not running, or `/vendor/bin/wpa_cli` is missing from the image | `adb shell getprop init.svc.wpa_supplicant` must print `running`; `wpa_cli` needs a build that lists it in `PRODUCT_PACKAGES` |
 | `wifi: no /data/vps_wifi.conf, run 'wifi connect'` | the device has never joined a network, so the boot script has nothing to replay | `adb shell wifi connect <ssid> <password>` once; the file is written from then on |
 | `vps-setup: no downloader on the device` | `curl` is missing from the image | use the `adb push` recipe the script prints, or rebuild with `curl` in `PRODUCT_PACKAGES` |
@@ -216,6 +216,6 @@ The last lines say whether sshd actually came up: `sshd started` followed by
 | `vps-boot: openssh-server not installed` in `/data/ubuntu-boot.log` | sshd missing | `apt install -y openssh-server` inside the chroot |
 | `dpkg` fails with `mktemp: failed to create file via template '/data/local/tmp/tmp.XXXXXXXXXX'` | `adb shell` exports `TMPDIR=/data/local/tmp`, which does not exist inside the chroot, so package postinst scripts abort | fixed in #53; run chroot commands with `export TMPDIR=/tmp` |
 | `apt` cannot reach the network from the chroot at all, for any resolver | Android routes unmarked traffic through the main table, which holds only the local subnet plus an `unreachable default` | fixed in #53. If the device still cannot reach the network, install offline: download the ten arm64 packages in `vps-setup/offline-debs.txt`, `adb push` them to `/data/ubuntu/tmp/`, then `DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/*.deb` inside the chroot |
-| `ping` says `socket: Permission denied` inside the chroot | the kernel is built with `CONFIG_ANDROID_PARANOID_NETWORK`, which gates `socket()` on the caller's GID and ignores `cap_net_raw`, so a user outside `aid_inet` (3003) and `aid_net_raw` (3004) cannot open a socket at all — name resolution fails the same way, as `Temporary failure in name resolution` | fixed in #79; on an older build run `chroot /data/ubuntu /usr/sbin/usermod -aG aid_inet,aid_net_raw root` and log in again |
+| `ping` says `socket: Permission denied` inside the chroot | the kernel is built with `CONFIG_ANDROID_PARANOID_NETWORK`, which gates `socket()` on the caller's GID and ignores `cap_net_raw`, so a user outside `aid_inet` (3003) and `aid_net_raw` (3004) cannot open a socket at all, and name resolution fails the same way, as `Temporary failure in name resolution` | fixed in #79; on an older build run `chroot /data/ubuntu /usr/sbin/usermod -aG aid_inet,aid_net_raw root` and log in again |
 | `vps-boot: could not mount /proc` | `/data/ubuntu` is missing or not a rootfs | re-run `vps-setup` |
-| `system_server` crash-loops after boot | SurfaceFlinger is disabled | see [ARCHITECTURE.md](ARCHITECTURE.md#headless-services-why-surfaceflinger-stays-enabled) — drop the `surfaceflinger` override |
+| `system_server` crash-loops after boot | SurfaceFlinger is disabled | see [ARCHITECTURE.md](ARCHITECTURE.md#headless-services-why-surfaceflinger-stays-enabled): drop the `surfaceflinger` override |

@@ -1,4 +1,4 @@
-# santoni — headless Ubuntu 22.04 VPS
+# santoni: headless Ubuntu 22.04 VPS
 
 A Xiaomi Redmi 4X (`santoni`) running keepQASSA Sisu v2.4_0.s (Android 10 / Q)
 reduced to a headless server. The Android side exists only to boot the kernel,
@@ -20,7 +20,7 @@ display server, and a missing launcher is not a bug.
 | **Device** | Xiaomi Redmi 4X (`santoni`) |
 | **SoC** | Qualcomm MSM8937 (Snapdragon 435) |
 | **Base** | keepQASSA Sisu v2.4_0.s (Android 10 / Q) |
-| **Kernel** | Luuvy `C.4.0.eol202601` — prebuilt, Linux 4.9.257 arm64 |
+| **Kernel** | Luuvy `C.4.0.eol202601`, prebuilt, Linux 4.9.257 arm64 |
 | **SELinux** | Permissive (required by the chroot) |
 | **Current release** | [`v1.2`](https://github.com/ziachi/santoni_qassa_ubuntu/releases/tag/v1.2) |
 | **Lunch target** | `qassa_santoni-userdebug` |
@@ -32,47 +32,53 @@ display server, and a missing launcher is not a bug.
 The kernel is the one component not built from this tree. Its source is not
 published, so it is used as a temporary baseline; replacing it with a
 self-built, open-source kernel is the next milestone. Everything that runs as
-root — `vps-setup/`, the boot scripts, the Wi-Fi path — is in this repository
-and can be read.
+root is in this repository and can be read: `vps-setup/`, the boot scripts, the
+Wi-Fi path.
 
 ---
 
 ## Proof & Resource Footprint
 
-![Windows PowerShell over SSH into the device, neofetch showing Ubuntu 22.04 on kernel 4.9.257, next to the Redmi 4X About phone screen](docs/screenshots/ssh-ubuntu-2204.jpg)
+![Windows Terminal over SSH into the chroot, neofetch showing Ubuntu 22.04 LTS aarch64 on kernel 4.9.257, 314 dpkg packages and 256 MiB of 1817 MiB in use](docs/screenshots/neofetch-v1.2.png)
 
-A Windows PowerShell session on the LAN, `ssh root@<device-ip>`, running
-`neofetch` inside the chroot, with the phone on the desk beside it. The
-`/dev/pts/0` line is the one worth reading: it means the session got a real
-pty, which is the devpts fix working. A chroot without devpts mounted cannot
-allocate one, and `ssh -tt` fails with `PTY allocation request failed on
-channel 0` even though the password was accepted.
+A Windows Terminal session on the LAN, `ssh ubuntu@<device-ip>`, running
+`neofetch` inside the chroot on a v1.2 build. The `/dev/pts/0` line is the one
+worth reading: it means the session got a real pty, which is the devpts fix
+working. A chroot without devpts mounted cannot allocate one, and `ssh -tt`
+fails with `PTY allocation request failed on channel 0` even though the password
+was accepted.
+
+314 dpkg packages is the whole server. `openssh-server`, `cron`, `iproute2`,
+`htop`, `curl`, `git` and the rest of `VPS_PACKAGES` are installed by
+`vps-setup`, so `crontab -e` schedules jobs that survive a reboot, `systemctl
+is-active` reports the real state, and `sudo reboot` brings the device back with
+the chroot and sshd running again.
 
 ![htop inside the chroot on an idle device: 94 tasks, 170M of 1.77G used, no zygote and no system_server](docs/screenshots/htop-idle.png)
 
-`htop` inside the chroot, 31 minutes after boot, with nothing running. A chroot
-shares the PID namespace, so the list is the Android host's. What matters is
-what is **not** there: no `zygote`, no `system_server`, no `app_process`, no
-`com.android.*`.
+`htop` inside the chroot, 31 minutes after boot, with nothing running: 94 tasks
+and 321 threads, 170 MB of 1.77 GB in use, 101 MB of swap, 8 cores on the
+`schedutil` governor with 7 of them idle at 0.0%. A chroot shares the PID
+namespace, so the list is the Android host's. What matters is what is **not**
+there: no `zygote`, no `system_server`, no `app_process`, no `com.android.*`.
 
 | Field | Value |
 |---|---|
 | Kernel | `4.9.257-Luuvy-Checkmate-B.4.0.Lesion.EOL202601 aarch64` |
-| OS | Ubuntu 22.04 LTS aarch64, 274 dpkg packages |
-| Memory (idle) | 170 MB of 1.77 GB, 101 MB swap of 2.00 GB |
-| Tasks | 94 tasks, 321 threads |
-| CPU | 8 cores, `schedutil` governor, 7 idle at 0.0% |
+| OS | Ubuntu 22.04 LTS aarch64, 314 dpkg packages |
+| Memory | 256 MiB of 1817 MiB in use |
+| CPU | 8 cores at 1.401 GHz |
 | Host (kernel) | Qualcomm MSM8940-PMI8950 QRD SKU7 |
-| Panel | 5.0" 720x1280 IPS, Adreno 505 |
-| Uptime at capture | 00:31:13 |
+| Shell / terminal | bash 5.1.16 on `/dev/pts/0` |
+| Uptime at capture | 39 minutes |
 
 The load average reads 3.24 next to an idle CPU because it counts processes in
 uninterruptible sleep, and the Android HAL services sit in that state. The CPU
 bars are the honest number for actual work.
 
-The `About phone` panel in the first screenshot reports `MSM8937` where the
-kernel reports `MSM8940`; both are the same Snapdragon 435 family, and the
-device tree targets `msm8937`.
+The device reports `MSM8937` on the About phone screen where the kernel reports
+`MSM8940`. Both are the same Snapdragon 435 family, and the device tree targets
+`msm8937`.
 
 ---
 
@@ -81,11 +87,11 @@ device tree targets `msm8937`.
 From a freshly flashed device to an SSH session:
 
 ```bash
-# 1. USB — no RSA prompt, adbd is already root
+# 1. USB: no RSA prompt, adbd is already root
 adb devices
 adb shell id                      # uid=0(root)
 
-# 2. USB — join Wi-Fi and install Ubuntu 22.04 in one command
+# 2. USB: join Wi-Fi and install Ubuntu 22.04 in one command
 adb shell vps-setup "MyWiFi" "MyWiFiPassword"
 
 # 3. note the IP the script prints, then move to Wi-Fi ADB
@@ -96,7 +102,7 @@ ssh ubuntu@<device-ip>
 ssh root@<device-ip>
 ```
 
-Steps 1–2 need the cable. After step 2 the device is self-sufficient: it
+Steps 1 and 2 need the cable. After step 2 the device is self-sufficient: it
 rejoins Wi-Fi and starts Ubuntu on every boot, so everything after that works
 over the network. `vps-setup` sets a random root password and prints it; it is
 also stored in `/data/ubuntu_root_pass` (mode 600) if you miss it.
@@ -113,8 +119,8 @@ reachable without a console. Change all of them on first login.
 
 | Account | Where | Default password | Change it with |
 |---|---|---|---|
-| `root` — Ubuntu chroot, SSH port 22 | `ssh root@<device-ip>` | `santoniadmin` | `passwd` |
-| `ubuntu` — non-root, `sudo` NOPASSWD | `ssh ubuntu@<device-ip>` | `ubuntu` | `passwd` |
+| `root` (Ubuntu chroot, SSH port 22) | `ssh root@<device-ip>` | `santoniadmin` | `passwd` |
+| `ubuntu` (non-root, `sudo` NOPASSWD) | `ssh ubuntu@<device-ip>` | `ubuntu` | `passwd` |
 | ADB over Wi-Fi, port 5555 | `adb -s <device-ip>:5555 shell` | `santoniadmin` | see below |
 
 ```bash
@@ -122,7 +128,7 @@ reachable without a console. Change all of them on first login.
 ssh root@<device-ip>   'passwd'
 ssh ubuntu@<device-ip> 'passwd'
 
-# ADB over Wi-Fi — change it over USB, where no password is needed
+# ADB over Wi-Fi: change it over USB, where no password is needed
 adb shell "echo 'my-new-password' > /data/adb_wifi_pass && chmod 600 /data/adb_wifi_pass"
 ```
 
@@ -135,13 +141,13 @@ time.
 
 **Official source.** The only official source is
 **https://github.com/ziachi/santoni_qassa_ubuntu**. A build, ZIP or "repack"
-from anywhere else — a Telegram channel, a file host, a mirror, a fork under a
-different name — is untrusted. A headless server image is an attractive target:
+from anywhere else (a Telegram channel, a file host, a mirror, a fork under a
+different name) is untrusted. A headless server image is an attractive target:
 a modified build can ship a crypto miner or a reverse shell and still boot and
 behave normally. Before flashing anything you did not build yourself, check the
 commit hash against this repository, verify the SHA256 of the ZIP against the
-release notes, and read `vps-setup/` — it is small, and it is the part that
-runs as root.
+release notes, and read `vps-setup/`. It is small, and it is the part that runs
+as root.
 
 **License.** The repository is Apache-2.0. `vps-setup/` carries its own
 source-available terms; see [`vps-setup/LICENSE`](vps-setup/LICENSE).
@@ -194,11 +200,11 @@ mka installclean && mka qassa
 
 Output: `out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip`, flashed
 from TWRP with `adb sideload`. Signing keys (`vendor/ziachi-keys`) are not on
-GitHub — generate your own.
+GitHub, so generate your own.
 
 Prerequisites, the webview LFS step, key generation, the build cheat sheet and
 the common build errors are in [docs/BUILD.md](docs/BUILD.md). How the image is
-assembled — boot sequence, package removal, hardware bridges — is in
+assembled (boot sequence, package removal, hardware bridges) is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
@@ -221,9 +227,9 @@ This README is the quick start. The deep-dive reference lives in
 
 ## Credits
 
-- [omansh-krishn](https://github.com/omansh-krishn) — original keepQASSA device tree for santoni
-- [ziachi](https://github.com/ziachi) — santoni port, headless VPS conversion, customizations, bug fixes
-- Luuvy — the prebuilt kernel (`C.4.0.eol202601`)
+- [omansh-krishn](https://github.com/omansh-krishn): original keepQASSA device tree for santoni
+- [ziachi](https://github.com/ziachi): santoni port, headless VPS conversion, customizations, bug fixes
+- Luuvy: the prebuilt kernel (`C.4.0.eol202601`)
 
 ---
 
