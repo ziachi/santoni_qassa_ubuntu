@@ -97,3 +97,9 @@ fi
 #if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
 #    . /etc/bash_completion
 #fi
+
+# zeroclaw opens $EDITOR to edit the system prompt. pam_env does not apply
+# /etc/environment in this chroot, so $EDITOR would be empty and zeroclaw
+# would fall back to vi (vim.tiny), which looks frozen to a nano user.
+export EDITOR=nano
+export VISUAL=nano

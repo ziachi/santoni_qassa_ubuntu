@@ -94,6 +94,7 @@
 | 88 | - | - | docs: add index README inside docs directory |
 | 89 | - | - | docs: refresh the v1.2 proof screenshot and trim em dashes |
 | 90 | - | - | docs: document the TUI raw-mode freeze and the missing terminal size |
+| 91 | - | - | docs: correct the TUI freeze entry, empty $EDITOR falls back to vi |
 
 ## Releases
 
@@ -2171,6 +2172,9 @@ stop, so the prose reads like a person wrote it.
 published, and the docs no longer read like a generated wall of dashes.
 
 ### #90 — a full-screen TUI in the chroot looks like a frozen shell
+> **Corrected by #91.** The diagnosis below is wrong. The TUI does release raw
+> mode and the alternate screen before it spawns `$EDITOR`, and Ctrl+C does
+> exit. The real cause is an empty `$EDITOR`, which makes zeroclaw open `vi`.
 
 **Problem.** `zeroclaw quickstart` is a full-screen TUI: it switches to the
 alternate screen, hides the cursor and puts the pty in raw mode. In raw mode
@@ -2194,3 +2198,37 @@ already sets `EDITOR` and `VISUAL` to `nano`, `pam_env` is active in
 
 **Impact.** Documentation only, no image change. A user who hits the freeze now
 has the exit key and the recovery command instead of force-closing the terminal.
+
+### #91 — `$EDITOR` is empty in the chroot, so zeroclaw opens `vi`
+
+**Problem.** `zeroclaw quickstart` asks `Edit system prompt in $EDITOR?` and then
+opens `vi` (`/usr/bin/vim.tiny`) instead of `nano`. `vi` is modal, so typing
+beeps and nothing appears, and there is no visible way out: the TUI reads as
+frozen and gets force-stopped. `/etc/environment` does set `EDITOR=nano` and
+`VISUAL=nano`, and `/etc/pam.d/sshd` does call `pam_env.so`, but `pam_env` never
+applies `/etc/environment` in this chroot. The session `PATH` is the seven-entry
+one, not the nine-entry one in `/etc/environment`, and `EDITOR` and `VISUAL` are
+absent from the environment in both a non-pty and a pty (`ssh -tt`) session.
+zeroclaw therefore falls back to `vi`.
+
+**Evidence.** Driving the TUI in a pty and sampling the process tree at the
+moment the editor runs shows the child of `zeroclaw quickstart` is
+`vi /tmp/edit-XXXXXXXX.txt`, not `nano`. The child's own `stty -a` reports
+`isig icanon iexten echo`, and the raw output carries `ESC[?1049l` before the
+editor draws and `ESC[?1049h` after it exits, so the TUI does restore the
+terminal and leave the alternate screen correctly. With `EDITOR=nano` present in
+the environment, `nano` 6.2 opens, edits and returns to the TUI normally.
+
+**Fix.** Export `EDITOR=nano` and `VISUAL=nano` from `~/.bashrc` and `~/.profile`
+for `ubuntu` and from `/root/.bashrc`, and ship the same lines in the chroot
+overlay (`vps-setup/rootdir/home/ubuntu/.bashrc`, `.profile`,
+`vps-setup/rootdir/root/.bashrc`, `.profile`) so a rebuilt chroot keeps them.
+`/etc/environment` is left as is: it is correct, it just never reaches the
+process.
+
+**Files.** `vps-setup/rootdir/home/ubuntu/.bashrc`,
+`vps-setup/rootdir/home/ubuntu/.profile`, `vps-setup/rootdir/root/.bashrc`,
+`vps-setup/rootdir/root/.profile`, `docs/VPS-SETUP.md`, `CHANGELOG.md`.
+
+**Impact.** `zeroclaw quickstart` now opens `nano` for the system prompt. No
+image change; the overlay applies on the next `vps-setup` run.
