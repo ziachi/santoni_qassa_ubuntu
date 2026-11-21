@@ -85,7 +85,47 @@ git remote add ziachi https://github.com/ziachi/frameworks_base_qassa.git
 git fetch ziachi
 git checkout ziachi/qassa-10
 cd ~/qassa
+
+# Build system patch: OTA banner prints build details instead of a joke.
+cd build/make
+git remote add ziachi https://github.com/ziachi/build_make_qassa.git
+git fetch ziachi
+git checkout ziachi/qassa-ubuntu
+cd ~/qassa
+
+# Wi-Fi shell command backport: cmd wifi connect-network / scan /
+# list-scan-results / disconnect / status. vps-setup's `wifi connect` needs it.
+cd frameworks/opt/net/wifi
+git remote add ziachi https://github.com/ziachi/frameworks_opt_net_wifi_qassa.git
+git fetch ziachi
+git checkout ziachi/qassa-ubuntu
+cd ~/qassa
+
+# Vendor config: brand the build as ubuntu22/ziachi.
+cd vendor/qassa
+git remote add ziachi https://github.com/ziachi/vendor_qassa.git
+git fetch ziachi
+git checkout ziachi/qassa-ubuntu
+cd ~/qassa
 ```
+
+### Kernel toolchain: `clang-proton`
+
+The kernel build needs `prebuilts/clang/host/linux-x86/clang-proton`, which the
+keepQASSA manifest does not provide. It is Proton clang 13.0.0 from
+[`kdrag0n/proton-clang`](https://github.com/kdrag0n/proton-clang) at commit
+`9fb011b` ("Update to 20210522 build"):
+
+```bash
+cd ~/qassa/prebuilts/clang/host/linux-x86
+git clone https://github.com/kdrag0n/proton-clang.git clang-proton
+cd clang-proton && git checkout 9fb011b
+```
+
+`clang-proton/bin/clang --version` should print
+`Proton clang version 13.0.0`. If the build complains about a missing
+`zyc_clang`, point `TARGET_KERNEL_CLANG_VERSION` at `clang-proton` (or at
+`clang-r353983c1` if you prefer the AOSP prebuilt).
 
 ## Step 3: Fix webview (build fails without this)
 

@@ -187,7 +187,7 @@ PostgreSQL and Redis will not start. The full option table is in
 
 ## Building from Source
 
-Four repositories, cloned into a synced keepQASSA tree:
+Seven repositories, cloned into a synced keepQASSA tree:
 
 | Repo | Branch | Clone path |
 |---|---|---|
@@ -195,6 +195,9 @@ Four repositories, cloned into a synced keepQASSA tree:
 | [vendor_xiaomi_santoni_qassa](https://github.com/ziachi/vendor_xiaomi_santoni_qassa) | `qassa-ubuntu` | `vendor/xiaomi` |
 | [kernel_xiaomi_msm8937_qassa](https://github.com/ziachi/kernel_xiaomi_msm8937_qassa) | `qassa-ubuntu` | `kernel/xiaomi/msm8937` |
 | [frameworks_base_qassa](https://github.com/ziachi/frameworks_base_qassa) | `qassa-10` | `frameworks/base` |
+| [build_make_qassa](https://github.com/ziachi/build_make_qassa) | `qassa-ubuntu` | `build/make` |
+| [frameworks_opt_net_wifi_qassa](https://github.com/ziachi/frameworks_opt_net_wifi_qassa) | `qassa-ubuntu` | `frameworks/opt/net/wifi` |
+| [vendor_qassa](https://github.com/ziachi/vendor_qassa) | `qassa-ubuntu` | `vendor/qassa` |
 
 ```bash
 mkdir -p ~/qassa && cd ~/qassa
@@ -209,6 +212,10 @@ mka installclean && mka qassa
 Output: `out/target/product/santoni/qassa_ubuntu22-ziachi-santoni.zip`, flashed
 from TWRP with `adb sideload`. Signing keys (`vendor/ziachi-keys`) are not on
 GitHub, so generate your own.
+
+The kernel toolchain `prebuilts/clang/host/linux-x86/clang-proton` (Proton clang
+13.0.0, `kdrag0n/proton-clang` @ `9fb011b`) is not in the manifest; see
+[docs/BUILD.md](docs/BUILD.md#step-2-clone-custom-repos) for how to fetch it.
 
 Prerequisites, the webview LFS step, key generation, the build cheat sheet and
 the common build errors are in [docs/BUILD.md](docs/BUILD.md). How the image is
